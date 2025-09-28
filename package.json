@@ -1,0 +1,26 @@
+{
+  "name": "paleengineweb",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0ctonaut/PaleEngineWeb.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/0ctonaut/PaleEngineWeb/issues"
+  },
+  "homepage": "https://github.com/0ctonaut/PaleEngineWeb#readme",
+  "description": "",
+  "dependencies": {
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "vite": "^7.1.7"
+  }
+}
