@@ -5,7 +5,11 @@ import{
 function main() {
     const container = document.querySelector('#scene-container');
     const world = new World(container);
-    world.render();
+    const button = document.getElementById('add-btn');
+        button.addEventListener('click', () => {
+        world.addMeshWithBoxHelper();
+    });
+    world.animate();
 }
 
 main();
