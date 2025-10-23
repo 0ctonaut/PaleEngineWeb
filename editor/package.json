@@ -1,0 +1,20 @@
+{
+  "name": "@paleengine/editor",
+  "version": "1.0.0",
+  "description": "PaleEngine Editor - Default editor interface for PaleEngine Core",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@paleengine/core": "workspace:*",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.180.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.7"
+  }
+}

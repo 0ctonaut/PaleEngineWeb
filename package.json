@@ -1,26 +1,45 @@
 {
-  "name": "paleengineweb",
+  "name": "paleengine",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "PaleEngine - A modern 3D engine with core and editor packages",
+  "private": true,
+  "workspaces": [
+    "core",
+    "editor"
+  ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "pnpm run --parallel dev",
+    "build": "pnpm run --recursive build",
+    "build:core": "pnpm --filter @paleengine/core build",
+    "build:editor": "pnpm --filter @paleengine/editor build",
+    "dev:core": "pnpm --filter @paleengine/core dev",
+    "dev:editor": "pnpm --filter @paleengine/editor dev",
+    "dev:full": "pnpm build:core && pnpm dev:editor",
+    "start": "pnpm build:core && pnpm dev:editor",
+    "type-check": "pnpm run --recursive type-check"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/0ctonaut/PaleEngineWeb.git"
   },
-  "keywords": [],
+  "keywords": [
+    "3d",
+    "engine",
+    "three.js",
+    "webgpu",
+    "typescript",
+    "monorepo"
+  ],
   "author": "",
   "license": "ISC",
   "bugs": {
     "url": "https://github.com/0ctonaut/PaleEngineWeb/issues"
   },
   "homepage": "https://github.com/0ctonaut/PaleEngineWeb#readme",
-  "description": "",
-  "dependencies": {
-    "three": "^0.180.0"
-  },
   "devDependencies": {
-    "vite": "^7.1.7"
+    "@types/three": "^0.180.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.7",
+    "pnpm": "^8.0.0"
   }
 }
