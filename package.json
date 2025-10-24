@@ -22,16 +22,8 @@
     "type": "git",
     "url": "git+https://github.com/0ctonaut/PaleEngineWeb.git"
   },
-  "keywords": [
-    "3d",
-    "engine",
-    "three.js",
-    "webgpu",
-    "typescript",
-    "monorepo"
-  ],
-  "author": "",
-  "license": "ISC",
+  "author": "0ctonaut",
+  "license": "GPL-3.0",
   "bugs": {
     "url": "https://github.com/0ctonaut/PaleEngineWeb/issues"
   },

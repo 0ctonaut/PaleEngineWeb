@@ -5,15 +5,18 @@ export class Resizer {
     private readonly _container: HTMLElement;
     private readonly _camera: PerspectiveCamera;
     private readonly _renderer: WebGPURenderer;
+    private _resizeCallback?: (width: number, height: number) => void;
 
     public constructor(
         container: HTMLElement,
         camera: PerspectiveCamera,
-        renderer: WebGPURenderer
+        renderer: WebGPURenderer,
+        resizeCallback?: (width: number, height: number) => void
     ) {
         this._container = container;
         this._camera = camera;
         this._renderer = renderer;
+        this._resizeCallback = resizeCallback;
         
         this._updateSize();
         this._setupResizeListener();
@@ -34,6 +37,11 @@ export class Resizer {
         
         this._renderer.setSize(width, height);
         this._renderer.setPixelRatio(window.devicePixelRatio);
+        
+        // 调用 resize 回调
+        if (this._resizeCallback) {
+            this._resizeCallback(width, height);
+        }
     }
 
     private _setupResizeListener(): void {

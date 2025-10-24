@@ -9,10 +9,11 @@ export default defineConfig({
       formats: ['es']
     },
     rollupOptions: {
-      external: ['three'],
+      external: ['three', 'three/webgpu'],
       output: {
         globals: {
-          three: 'THREE'
+          three: 'THREE',
+          'three/webgpu': 'THREE'
         }
       }
     },

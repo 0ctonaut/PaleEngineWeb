@@ -7,5 +7,15 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist'
+  },
+  resolve: {
+    dedupe: ['three', 'three/webgpu'],
+    alias: {
+      'three/webgpu': 'three/webgpu'
+    }
+  },
+  optimizeDeps: {
+    include: ['three/webgpu'],
+    force: true
   }
 })
