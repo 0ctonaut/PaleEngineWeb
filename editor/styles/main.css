@@ -6,7 +6,7 @@ body {
   /* style text */
   text-align: center;
   font-size: 12px;
-  font-family: Sans-Serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
   /* color text */
   color: #444;
@@ -26,6 +26,7 @@ h1 {
   position: absolute;
   width: 100%;
   height: 100%;
+  top: 40px; /* 为顶栏留出空间 */
 
   /*
     Set the container's background color to the same as the scene's

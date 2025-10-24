@@ -8,12 +8,12 @@ export class GlobalInputManager {
   private mousePosition: Position = { x: 0, y: 0 };
   private lastMousePosition: Position = { x: 0, y: 0 };
   
-  // 注册表
+  // Registry
   private localManagers: Set<any> = new Set();
   
   private contextStack: any[] = [];
   
-  // 事件监听器
+  // Event listeners
   private boundKeyDownHandler: (e: KeyboardEvent) => void;
   private boundKeyUpHandler: (e: KeyboardEvent) => void;
   private boundMouseMoveHandler: (e: MouseEvent) => void;
@@ -22,7 +22,7 @@ export class GlobalInputManager {
   private boundWheelHandler: (e: WheelEvent) => void;
   
   private constructor() {
-    // 绑定事件处理器
+    // Bind event handlers
     this.boundKeyDownHandler = this.handleKeyDown.bind(this);
     this.boundKeyUpHandler = this.handleKeyUp.bind(this);
     this.boundMouseMoveHandler = this.handleMouseMove.bind(this);
@@ -30,7 +30,7 @@ export class GlobalInputManager {
     this.boundMouseUpHandler = this.handleMouseUp.bind(this);
     this.boundWheelHandler = this.handleWheel.bind(this);
     
-    // 添加全局事件监听器
+    // Add global event listeners
     this.addGlobalListeners();
   }
   
@@ -42,7 +42,7 @@ export class GlobalInputManager {
   }
   
   /**
-   * 添加全局事件监听器
+   * Add global event listeners
    */
   private addGlobalListeners(): void {
     window.addEventListener('keydown', this.boundKeyDownHandler, { passive: false });
@@ -54,7 +54,7 @@ export class GlobalInputManager {
   }
   
   /**
-   * 移除全局事件监听器
+   * Remove global event listeners
    */
   private removeGlobalListeners(): void {
     window.removeEventListener('keydown', this.boundKeyDownHandler);
@@ -66,7 +66,7 @@ export class GlobalInputManager {
   }
   
   /**
-   * 键盘事件处理
+   * Handle keyboard events
    */
   private handleKeyDown(e: KeyboardEvent): void {
     this.keyStates.set(e.code, true);
@@ -79,7 +79,7 @@ export class GlobalInputManager {
   }
   
   /**
-   * 鼠标事件处理
+   * Handle mouse events
    */
   private handleMouseMove(e: MouseEvent): void {
     this.lastMousePosition = { ...this.mousePosition };
@@ -102,20 +102,20 @@ export class GlobalInputManager {
   }
   
   /**
-   * 事件分发
+   * Distribute events
    */
   private distributeEvent(event: Event): void {
-    // 按优先级顺序分发事件到 LocalInputManager
+    // Distribute events to LocalInputManager in priority order
     const sortedManagers = Array.from(this.localManagers).sort((a, b) => {
       const aPriority = a.context?.getPriority() || 0;
       const bPriority = b.context?.getPriority() || 0;
-      return bPriority - aPriority; // 高优先级在前
+      return bPriority - aPriority; // Higher priority first
     });
     
     for (const manager of sortedManagers) {
       if (manager.context?.isEnabled() && manager.shouldReceiveEvent?.(event)) {
         manager.handleGlobalEvent?.(event);
-        // 如果当前上下文是独占模式,停止分发
+        // If current context is exclusive, stop distribution
         if (manager.context?.isExclusive?.()) {
           break;
         }
@@ -123,96 +123,96 @@ export class GlobalInputManager {
     }
   }
   
-  // ========== 键盘状态查询 ==========
+  // ========== Keyboard State Query ==========
   
   /**
-   * 检查按键是否被按下
+   * Check if key is pressed
    */
   public isKeyPressed(key: string): boolean {
     return this.keyStates.get(key) || false;
   }
   
   /**
-   * 检查按键是否刚被按下(当前帧)
+   * Check if key was just pressed (current frame)
    */
   public isKeyDown(key: string): boolean {
     return this.keyStates.get(key) || false;
   }
   
   /**
-   * 检查组合键是否被按下
+   * Check if key combination is pressed
    */
   public isKeyComboPressed(keys: string[]): boolean {
     return keys.every(key => this.isKeyPressed(key));
   }
   
   /**
-   * 检查 Ctrl 组合键
+   * Check Ctrl combination
    */
   public isCtrlPressed(): boolean {
     return this.isKeyPressed(Keys.CTRL_LEFT) || this.isKeyPressed(Keys.CTRL_RIGHT);
   }
   
   /**
-   * 检查 Shift 组合键
+   * Check Shift combination
    */
   public isShiftPressed(): boolean {
     return this.isKeyPressed(Keys.SHIFT_LEFT) || this.isKeyPressed(Keys.SHIFT_RIGHT);
   }
   
   /**
-   * 检查 Alt 组合键
+   * Check Alt combination
    */
   public isAltPressed(): boolean {
     return this.isKeyPressed(Keys.ALT_LEFT) || this.isKeyPressed(Keys.ALT_RIGHT);
   }
   
   /**
-   * 检查 Meta 组合键(Windows 键/Cmd 键)
+   * Check Meta combination (Windows key/Cmd key)
    */
   public isMetaPressed(): boolean {
     return this.isKeyPressed(Keys.META_LEFT) || this.isKeyPressed(Keys.META_RIGHT);
   }
   
-  // ========== 鼠标状态查询 ==========
+  // ========== Mouse State Query ==========
   
   /**
-   * 检查鼠标按钮是否被按下
+   * Check if mouse button is pressed
    */
   public isMouseButtonPressed(button: number): boolean {
     return this.mouseButtons.get(button) || false;
   }
   
   /**
-   * 检查左键是否被按下
+   * Check if left mouse button is pressed
    */
   public isLeftMousePressed(): boolean {
     return this.isMouseButtonPressed(0);
   }
   
   /**
-   * 检查右键是否被按下
+   * Check if right mouse button is pressed
    */
   public isRightMousePressed(): boolean {
     return this.isMouseButtonPressed(2);
   }
   
   /**
-   * 检查中键是否被按下
+   * Check if middle mouse button is pressed
    */
   public isMiddleMousePressed(): boolean {
     return this.isMouseButtonPressed(1);
   }
   
   /**
-   * 获取全局鼠标位置
+   * Get global mouse position
    */
   public getGlobalMousePosition(): Position {
     return { ...this.mousePosition };
   }
   
   /**
-   * 获取鼠标移动增量
+   * Get mouse movement delta
    */
   public getMouseDelta(): Position {
     return {
@@ -221,32 +221,32 @@ export class GlobalInputManager {
     };
   }
   
-  // ========== LocalManager 注册 ==========
+  // ========== LocalManager Registration ==========
   
   /**
-   * 注册 LocalInputManager
+   * Register LocalInputManager
    */
   public registerLocalManager(manager: any): void {
     this.localManagers.add(manager);
   }
   
   /**
-   * 注销 LocalInputManager
+   * Unregister LocalInputManager
    */
   public unregisterLocalManager(manager: any): void {
     this.localManagers.delete(manager);
   }
   
-  // ========== 上下文管理 ==========
+  // ========== Context Management ==========
   
   /**
-   * 推入上下文到栈顶
+   * Push context to stack top
    */
   public pushContext(context: any): void {
-    // 移除已存在的相同上下文
+    // Remove existing same context
     this.removeContext(context);
     
-    // 按优先级插入到正确位置
+    // Insert at correct position by priority
     const insertIndex = this.contextStack.findIndex(ctx => ctx.getPriority() < context.getPriority());
     if (insertIndex === -1) {
       this.contextStack.push(context);
@@ -256,14 +256,14 @@ export class GlobalInputManager {
   }
   
   /**
-   * 从栈中移除上下文
+   * Remove context from stack
    */
   public popContext(context: any): void {
     this.removeContext(context);
   }
   
   /**
-   * 移除上下文(内部方法)
+   * Remove context (internal method)
    */
   private removeContext(context: any): void {
     const index = this.contextStack.indexOf(context);
@@ -273,23 +273,23 @@ export class GlobalInputManager {
   }
   
   /**
-   * 获取当前活跃的上下文
+   * Get current active context
    */
   public getActiveContext(): any | null {
     return this.contextStack.length > 0 ? this.contextStack[0] : null;
   }
   
   /**
-   * 获取所有上下文
+   * Get all contexts
    */
   public getContextStack(): any[] {
     return [...this.contextStack];
   }
   
-  // ========== 工具方法 ==========
+  // ========== Utility Methods ==========
   
   /**
-   * 重置所有状态
+   * Reset all states
    */
   public reset(): void {
     this.keyStates.clear();
@@ -299,7 +299,7 @@ export class GlobalInputManager {
   }
   
   /**
-   * 销毁管理器
+   * Dispose manager
    */
   public dispose(): void {
     this.removeGlobalListeners();

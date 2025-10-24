@@ -1,0 +1,163 @@
+/* macOS Style Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.modal-overlay.show {
+  opacity: 1;
+}
+
+.modal {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: hidden;
+  transform: scale(0.9);
+  transition: transform 0.2s ease;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.modal-overlay.show .modal {
+  transform: scale(1);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.modal-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+
+.modal-close {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ff5f57;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.modal-close:hover {
+  background: #ff3b30;
+  transform: scale(1.1);
+}
+
+.modal-close::before {
+  content: '×';
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.modal-content {
+  padding: 20px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* Parameter Control Group Styles */
+.param-group {
+  margin-bottom: 20px;
+}
+
+.param-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.param-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.param-slider {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: #e5e5e7;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.param-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #007AFF;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.param-slider::-webkit-slider-thumb:hover {
+  background: #0056CC;
+  transform: scale(1.1);
+}
+
+.param-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #007AFF;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.param-input {
+  width: 80px;
+  padding: 6px 8px;
+  border: 1px solid #d1d1d6;
+  border-radius: 6px;
+  font-size: 12px;
+  text-align: center;
+  background: white;
+  transition: all 0.2s ease;
+}
+
+.param-input:focus {
+  outline: none;
+  border-color: #007AFF;
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+}
+
+.param-value {
+  font-size: 11px;
+  color: #666;
+  min-width: 40px;
+  text-align: right;
+}

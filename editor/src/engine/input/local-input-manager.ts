@@ -3,7 +3,7 @@ import { InputContext } from './input-context';
 import { GlobalInputManager } from './global-input-manager';
 
 /**
- * 局部输入管理器 - 绑定到特定 DOM 元素
+ * Local Input Manager - bound to specific DOM element
  */
 export class LocalInputManager {
   private element: HTMLElement;
@@ -12,20 +12,21 @@ export class LocalInputManager {
   private parent: LocalInputManager | null = null;
   private children: Set<LocalInputManager> = new Set();
   
-  // 拖拽状态
+  // Drag state
   private _isDragging: boolean = false;
   private dragStartPos: Position | null = null;
   private dragConfig: DragConfig;
   private lastMousePos: Position = { x: 0, y: 0 };
+  private dragButtons: Set<number> = new Set();
   
-  // 悬停状态
+  // Hover state
   private _isHovering: boolean = false;
   private hoveredElement: HTMLElement | null = null;
   
-  // 事件监听器
+  // Event listeners
   private boundHandlers: Map<string, EventListener> = new Map();
   
-  // 全局管理器引用
+  // Global manager reference
   private globalManager: GlobalInputManager;
   
   constructor(
@@ -44,6 +45,9 @@ export class LocalInputManager {
       ...options?.dragConfig
     };
     
+    // 初始化拖拽按钮集合
+    this.updateDragButtons();
+    
     // 设置父子关系
     if (options?.parent) {
       this.setParent(options.parent);
@@ -60,6 +64,27 @@ export class LocalInputManager {
     this.bindEventListeners();
   }
   
+  // ========== 拖拽按钮管理 ==========
+  
+  /**
+   * 更新拖拽按钮集合
+   */
+  private updateDragButtons(): void {
+    this.dragButtons.clear();
+    if (Array.isArray(this.dragConfig.button)) {
+      this.dragButtons = new Set(this.dragConfig.button);
+    } else if (typeof this.dragConfig.button === 'number') {
+      this.dragButtons.add(this.dragConfig.button);
+    }
+  }
+  
+  /**
+   * 检查按钮是否支持拖拽
+   */
+  private isDragButton(button: number): boolean {
+    return this.dragButtons.has(button);
+  }
+
   // ========== 事件订阅系统 ==========
   
   /**
@@ -176,7 +201,7 @@ export class LocalInputManager {
   
   private handleMouseDown(e: Event): void {
     const mouseEvent = e as MouseEvent;
-    if (mouseEvent.button === this.dragConfig.button) {
+    if (this.isDragButton(mouseEvent.button)) {
       this.dragStartPos = this.getRelativePosition(mouseEvent.clientX, mouseEvent.clientY);
     }
     
@@ -197,8 +222,8 @@ export class LocalInputManager {
     const mouseEvent = e as MouseEvent;
     const currentPos = this.getRelativePosition(mouseEvent.clientX, mouseEvent.clientY);
     
-    // 检查是否开始拖拽
-    if (this.dragStartPos && !this._isDragging) {
+    // 检查是否开始拖拽（需要检查当前按下的按钮是否支持拖拽）
+    if (this.dragStartPos && !this._isDragging && this.isDragButton(mouseEvent.button)) {
       const distance = Math.hypot(
         currentPos.x - this.dragStartPos.x,
         currentPos.y - this.dragStartPos.y

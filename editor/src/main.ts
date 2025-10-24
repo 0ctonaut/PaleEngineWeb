@@ -1,11 +1,17 @@
 import { World } from './engine/world';
-
+import { Toolbar } from './ui';
 
 function main(): void {
     try {
         const container = document.querySelector('#scene-container') as HTMLElement;
+        const toolbarContainer = document.querySelector('#toolbar') as HTMLElement;
+        
         if (!container) {
             throw new Error('Scene container element not found. Please ensure #scene-container exists in the DOM.');
+        }
+        
+        if (!toolbarContainer) {
+            throw new Error('Toolbar container element not found. Please ensure #toolbar exists in the DOM.');
         }
         
         if (container.clientWidth === 0 || container.clientHeight === 0) {
@@ -14,6 +20,11 @@ function main(): void {
         
         const world = new World(container);
         (window as any).world = world;
+        
+        // Initialize UI
+        const toolbar = new Toolbar(world.getCameraController());
+        toolbarContainer.appendChild(toolbar.getElement());
+        
         console.log('PaleEngine Editor initialized successfully');
         
     } catch (error) {

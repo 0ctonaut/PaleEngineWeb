@@ -7,9 +7,11 @@ import {
     createLights, 
     Resizer 
 } from '@paleengine/core';
-import { PerspectiveCamera, WebGPURenderer, Scene, Mesh, Raycaster, Vector2, Color } from 'three/webgpu';
-import { LocalInputManager, InputContext, InputEvent, EventTypes } from './input';
+import { PerspectiveCamera, WebGPURenderer, Scene, Mesh, Color } from 'three/webgpu';
+import { LocalInputManager, InputContext } from './input';
 import { OutlineRenderer, OutlineConfig } from './rendering';
+import { OrbitCameraController } from './camera';
+import { ProcessorManager, SelectionProcessor } from './processors';
 
 export class World {
     private readonly camera: PerspectiveCamera;
@@ -19,10 +21,17 @@ export class World {
     private animationId: number | null = null;
     private inputManager!: LocalInputManager;
     private canvasInputContext!: InputContext;
-    private raycaster!: Raycaster;
     private selectedMesh: Mesh | null = null;
     private outlineRenderer!: OutlineRenderer;
     private resizer!: Resizer;
+    private cameraController!: OrbitCameraController;
+    
+    // Processor architecture
+    private processorManager!: ProcessorManager;
+    private selectionProcessor!: SelectionProcessor;
+    
+    // Time tracking
+    private lastFrameTime: number = 0;
 
     public constructor(container: HTMLElement) {
         this.camera = createCamera(75, 1, 0.1, 1000, [0, 0, 10]);
@@ -30,6 +39,8 @@ export class World {
         this.renderer = createRenderer();
         
         this.initializeInputSystem(container);
+        this.initializeCameraController();
+        this.initializeProcessors();
         this.initializeOutlineRenderer(container);
         
         this.resizer = new Resizer(container, this.camera, this.renderer, (width, height) => {
@@ -43,8 +54,24 @@ export class World {
 
     public async animate(): Promise<void> {
         this.animationId = requestAnimationFrame(() => this.animate());
+        
+        const deltaTime = this.calculateDeltaTime();
+        
+        // Update processor layer
+        this.processorManager.update(deltaTime);
+        
+        // Update scene
         this.updateMeshes();
+        
+        // Render
         await this.render();
+    }
+
+    private calculateDeltaTime(): number {
+        const currentTime = performance.now();
+        const deltaTime = this.lastFrameTime === 0 ? 0 : (currentTime - this.lastFrameTime) / 1000;
+        this.lastFrameTime = currentTime;
+        return deltaTime;
     }
 
     public stopAnimation(): void {
@@ -67,6 +94,14 @@ export class World {
         
         if (this.resizer) {
             this.resizer.dispose();
+        }
+        
+        if (this.processorManager) {
+            this.processorManager.dispose();
+        }
+        
+        if (this.cameraController) {
+            this.cameraController.dispose();
         }
         
         this.scene.clear();
@@ -106,6 +141,12 @@ export class World {
     private setupRenderer(container: HTMLElement): void {
         this.renderer.setSize(container.clientWidth, container.clientHeight);
         this.renderer.setPixelRatio(window.devicePixelRatio);
+        
+        // Disable right-click context menu on canvas
+        this.renderer.domElement.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+        });
+        
         container.append(this.renderer.domElement);
     }
 
@@ -137,7 +178,7 @@ export class World {
         });
         this.canvasInputContext.activate();
         
-        this.raycaster = new Raycaster();
+        // raycaster now managed by SelectionProcessor
         
         this.inputManager = new LocalInputManager(
             container,
@@ -145,12 +186,38 @@ export class World {
             {
                 dragConfig: {
                     threshold: 5,
-                    button: 0
+                    button: [0, 2] // Support left(0) and right(2) button dragging
                 }
             }
         );
         
         this.setupInputHandlers();
+    }
+    
+    private initializeCameraController(): void {
+        this.cameraController = new OrbitCameraController(
+            this.camera,
+            this.inputManager,
+            {
+                rotateSensitivity: 0.01,
+                panSensitivity: 0.01,
+                zoomSensitivity: 0.1,
+                minDistance: 1,
+                maxDistance: 100
+            }
+        );
+    }
+
+    private initializeProcessors(): void {
+        this.processorManager = new ProcessorManager();
+        
+        // Add selection processor
+        this.selectionProcessor = new SelectionProcessor(this, this.inputManager);
+        this.processorManager.addProcessor('selection', this.selectionProcessor);
+        
+        // Can add more processors in the future
+        // this.processorManager.addProcessor('gizmo', new GizmoProcessor(...));
+        // this.processorManager.addProcessor('transform', new TransformProcessor(...));
     }
     
     private initializeOutlineRenderer(container: HTMLElement): void {
@@ -168,72 +235,12 @@ export class World {
     }
     
     private setupInputHandlers(): void {
-        this.inputManager.on(EventTypes.CLICK, (event) => {
-            this.handleClick(event);
-        });
-        
-        this.inputManager.on(EventTypes.DRAG_START, () => {
-            console.log('Camera drag started');
-        });
-        
-        this.inputManager.on(EventTypes.DRAG, (event) => {
-            this.handleCameraDrag(event);
-        });
-        
-        this.inputManager.on(EventTypes.DRAG_END, () => {
-            console.log('Camera drag ended');
-        });
-        
-        this.inputManager.on(EventTypes.WHEEL, (event) => {
-            this.handleWheel(event);
-        });
+        // 输入处理现在由处理器层负责
+        // 这里可以添加其他全局输入处理逻辑
     }
     
-    private handleClick(event: InputEvent): void {
-        const vector2 = new Vector2(event.normalizedPosition.x, event.normalizedPosition.y);
-        this.raycaster.setFromCamera(vector2, this.camera);
-        const intersects = this.raycaster.intersectObjects(this.scene.children, true);
-        
-        if (intersects.length > 0) {
-            const mesh = intersects[0].object as Mesh;
-            this.selectMesh(mesh);
-        } else {
-            this.deselectMesh();
-        }
-    }
     
-    private handleCameraDrag(event: InputEvent): void {
-        const sensitivity = 0.01;
-        this.camera.rotation.y -= event.delta!.x * sensitivity;
-        this.camera.rotation.x -= event.delta!.y * sensitivity;
-        
-        this.camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.camera.rotation.x));
-    }
-    
-    private handleWheel(event: InputEvent): void {
-        const wheelEvent = event.originalEvent as WheelEvent;
-        const zoomSpeed = 0.1;
-        const zoom = wheelEvent.deltaY > 0 ? 1 + zoomSpeed : 1 - zoomSpeed;
-        
-        this.camera.position.multiplyScalar(zoom);
-        
-        const distance = this.camera.position.length();
-        if (distance < 1) {
-            this.camera.position.normalize().multiplyScalar(1);
-        } else if (distance > 50) {
-            this.camera.position.normalize().multiplyScalar(50);
-        }
-    }
-    
-    private selectMesh(mesh: Mesh): void {
-        this.selectedMesh = mesh;
-        console.log('Selected mesh:', mesh);
-    }
-    
-    private deselectMesh(): void {
-        this.selectedMesh = null;
-        console.log('Deselected mesh');
-    }
+    // 选择逻辑现在由 SelectionProcessor 处理
     
     public updateOutlineSize(width: number, height: number): void {
         if (this.outlineRenderer) {
@@ -245,5 +252,22 @@ export class World {
         if (this.outlineRenderer) {
             this.outlineRenderer.updateConfig(config);
         }
+    }
+
+    public getCameraController(): OrbitCameraController {
+        return this.cameraController;
+    }
+
+    // 提供访问器供处理器使用
+    public getCamera(): PerspectiveCamera {
+        return this.camera;
+    }
+
+    public getScene(): Scene {
+        return this.scene;
+    }
+
+    public setSelectedMesh(mesh: Mesh | null): void {
+        this.selectedMesh = mesh;
     }
 }

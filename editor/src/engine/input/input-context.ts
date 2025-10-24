@@ -3,138 +3,138 @@ import { InputContextConfig, InputEvent } from './types';
 export class InputContext {
   private config: InputContextConfig;
   private enabled: boolean = true;
-  private managers: Set<any> = new Set(); // 使用 any 避免循环依赖
+  private managers: Set<any> = new Set(); // Use any to avoid circular dependency
   private isActive: boolean = false;
   
   constructor(config: InputContextConfig) {
     this.config = { ...config };
   }
   
-  // ========== 启用/禁用 ==========
+  // ========== Enable/Disable ==========
   
   /**
-   * 启用上下文
+   * Enable context
    */
   public enable(): void {
     this.enabled = true;
   }
   
   /**
-   * 禁用上下文
+   * Disable context
    */
   public disable(): void {
     this.enabled = false;
   }
   
   /**
-   * 检查是否启用
+   * Check if enabled
    */
   public isEnabled(): boolean {
     return this.enabled;
   }
   
-  // ========== 优先级管理 ==========
+  // ========== Priority Management ==========
   
   /**
-   * 获取优先级
+   * Get priority
    */
   public getPriority(): number {
     return this.config.priority;
   }
   
   /**
-   * 设置优先级
+   * Set priority
    */
   public setPriority(priority: number): void {
     this.config.priority = priority;
   }
   
   /**
-   * 检查是否为独占模式
+   * Check if exclusive mode
    */
   public isExclusive(): boolean {
     return this.config.exclusive || false;
   }
   
   /**
-   * 设置独占模式
+   * Set exclusive mode
    */
   public setExclusive(exclusive: boolean): void {
     this.config.exclusive = exclusive;
   }
   
   /**
-   * 检查是否阻止事件传播
+   * Check if should block event propagation
    */
   public shouldBlockPropagation(): boolean {
     return this.config.blockPropagation || false;
   }
   
   /**
-   * 设置是否阻止事件传播
+   * Set whether to block event propagation
    */
   public setBlockPropagation(block: boolean): void {
     this.config.blockPropagation = block;
   }
   
-  // ========== Manager 关联 ==========
+  // ========== Manager Association ==========
   
   /**
-   * 添加关联的 LocalInputManager
+   * Add associated LocalInputManager
    */
   public addManager(manager: any): void {
     this.managers.add(manager);
   }
   
   /**
-   * 移除关联的 LocalInputManager
+   * Remove associated LocalInputManager
    */
   public removeManager(manager: any): void {
     this.managers.delete(manager);
   }
   
   /**
-   * 获取所有关联的 Manager
+   * Get all associated Managers
    */
   public getManagers(): any[] {
     return Array.from(this.managers);
   }
   
   /**
-   * 清空所有关联的 Manager
+   * Clear all associated Managers
    */
   public clearManagers(): void {
     this.managers.clear();
   }
   
-  // ========== 事件过滤 ==========
+  // ========== Event Filtering ==========
   
   /**
-   * 检查是否应该接收事件
+   * Check if should receive event
    */
   public shouldReceiveEvent(_event: InputEvent): boolean {
     if (!this.enabled || !this.isActive) {
       return false;
     }
     
-    // 如果上下文是独占模式,只有最高优先级的上下文能接收事件
+    // If context is exclusive, only the highest priority context can receive events
     if (this.config.exclusive) {
-      // 这里需要从 GlobalInputManager 获取当前最高优先级上下文
-      // 暂时返回 true,实际实现中需要更复杂的逻辑
+      // Need to get current highest priority context from GlobalInputManager
+      // Return true for now, actual implementation needs more complex logic
       return true;
     }
     
     return true;
   }
   
-  // ========== 激活/停用 ==========
+  // ========== Activation/Deactivation ==========
   
   /**
-   * 激活上下文(推入栈顶)
+   * Activate context (push to stack top)
    */
   public activate(): void {
     this.isActive = true;
-    // 通知 GlobalInputManager 更新上下文栈
+    // Notify GlobalInputManager to update context stack
     const globalManager = (globalThis as any).GlobalInputManager?.getInstance?.();
     if (globalManager) {
       globalManager.pushContext(this);
@@ -142,11 +142,11 @@ export class InputContext {
   }
   
   /**
-   * 停用上下文(从栈中移除)
+   * Deactivate context (remove from stack)
    */
   public deactivate(): void {
     this.isActive = false;
-    // 通知 GlobalInputManager 移除上下文
+    // Notify GlobalInputManager to remove context
     const globalManager = (globalThis as any).GlobalInputManager?.getInstance?.();
     if (globalManager) {
       globalManager.popContext(this);
@@ -157,7 +157,7 @@ export class InputContext {
     return this.isActive;
   }
   
-  // ========== 配置管理 ==========
+  // ========== Configuration Management ==========
   
   public getName(): string {
     return this.config.name;
@@ -171,10 +171,10 @@ export class InputContext {
     return { ...this.config };
   }
   
-  // ========== 调试和状态 ==========
+  // ========== Debug and Status ==========
   
   /**
-   * 获取上下文状态信息
+   * Get context status information
    */
   public getStatus(): {
     name: string;
@@ -197,7 +197,7 @@ export class InputContext {
   }
   
   /**
-   * 销毁上下文
+   * Dispose context
    */
   public dispose(): void {
     this.deactivate();
