@@ -45,29 +45,29 @@ export class LocalInputManager {
       ...options?.dragConfig
     };
     
-    // 初始化拖拽按钮集合
+    // Initialize drag button collection
     this.updateDragButtons();
     
-    // 设置父子关系
+    // Set parent-child relationship
     if (options?.parent) {
       this.setParent(options.parent);
     }
     
-    // 获取全局管理器
+    // Get global manager
     this.globalManager = GlobalInputManager.getInstance();
     
-    // 注册到全局管理器和上下文
+    // Register to global manager and context
     this.globalManager.registerLocalManager(this);
     this.context.addManager(this);
     
-    // 绑定事件监听器
+    // Bind event listeners
     this.bindEventListeners();
   }
   
-  // ========== 拖拽按钮管理 ==========
+  // ========== Drag Button Management ==========
   
   /**
-   * 更新拖拽按钮集合
+   * Update drag button collection
    */
   private updateDragButtons(): void {
     this.dragButtons.clear();
@@ -79,16 +79,16 @@ export class LocalInputManager {
   }
   
   /**
-   * 检查按钮是否支持拖拽
+   * Check if button supports dragging
    */
   private isDragButton(button: number): boolean {
     return this.dragButtons.has(button);
   }
 
-  // ========== 事件订阅系统 ==========
+  // ========== Event Subscription System ==========
   
   /**
-   * 订阅事件
+   * Subscribe to event
    */
   public on(event: string, handler: EventHandler): void {
     if (!this.listeners.has(event)) {
@@ -98,7 +98,7 @@ export class LocalInputManager {
   }
   
   /**
-   * 取消订阅事件
+   * Unsubscribe from event
    */
   public off(event: string, handler: EventHandler): void {
     const handlers = this.listeners.get(event);
@@ -111,7 +111,7 @@ export class LocalInputManager {
   }
   
   /**
-   * 一次性事件订阅
+   * One-time event subscription
    */
   public once(event: string, handler: EventHandler): void {
     const onceHandler = (e: InputEvent) => {
@@ -122,12 +122,12 @@ export class LocalInputManager {
   }
   
   /**
-   * 触发事件
+   * Emit event
    */
   private emitEvent(event: InputEvent): void {
     if (!this.context.isEnabled()) return;
     
-    // 1. 触发当前管理器的监听器
+    // 1. Trigger listeners of current manager
     const handlers = this.listeners.get(event.type);
     if (handlers) {
       for (const handler of handlers) {
@@ -136,19 +136,19 @@ export class LocalInputManager {
       }
     }
     
-    // 2. 如果未停止冒泡且未阻止传播,传递给父管理器
+    // 2. If not stopped and not prevented, pass to parent manager
     if (!event.isPropagationStopped && !this.context.shouldBlockPropagation() && this.parent) {
       this.parent.emitEvent(event);
     }
   }
   
-  // ========== 事件监听器绑定 ==========
+  // ========== Event Listener Binding ==========
   
   /**
-   * 绑定事件监听器
+   * Bind event listeners
    */
   private bindEventListeners(): void {
-    // 鼠标事件
+    // Mouse events
     this.addElementListener(EventTypes.MOUSE_DOWN, this.handleMouseDown.bind(this));
     this.addElementListener(EventTypes.MOUSE_UP, this.handleMouseUp.bind(this));
     this.addElementListener(EventTypes.MOUSE_MOVE, this.handleMouseMove.bind(this));
@@ -157,29 +157,29 @@ export class LocalInputManager {
     this.addElementListener(EventTypes.CONTEXT_MENU, this.handleContextMenu.bind(this));
     this.addElementListener(EventTypes.WHEEL, this.handleWheel.bind(this));
     
-    // 悬停事件
+    // Hover events
     this.addElementListener(EventTypes.MOUSE_ENTER, this.handleMouseEnter.bind(this));
     this.addElementListener(EventTypes.MOUSE_LEAVE, this.handleMouseLeave.bind(this));
     this.addElementListener(EventTypes.MOUSE_OVER, this.handleMouseOver.bind(this));
     this.addElementListener(EventTypes.MOUSE_OUT, this.handleMouseOut.bind(this));
     
-    // 键盘事件
+    // Keyboard events
     this.addElementListener(EventTypes.KEY_DOWN, this.handleKeyDown.bind(this));
     this.addElementListener(EventTypes.KEY_UP, this.handleKeyUp.bind(this));
     
-    // 触摸事件
+    // Touch events
     this.addElementListener(EventTypes.TOUCH_START, this.handleTouchStart.bind(this));
     this.addElementListener(EventTypes.TOUCH_MOVE, this.handleTouchMove.bind(this));
     this.addElementListener(EventTypes.TOUCH_END, this.handleTouchEnd.bind(this));
     this.addElementListener(EventTypes.TOUCH_CANCEL, this.handleTouchCancel.bind(this));
     
-    // 焦点事件
+    // Focus events
     this.addElementListener(EventTypes.FOCUS, this.handleFocus.bind(this));
     this.addElementListener(EventTypes.BLUR, this.handleBlur.bind(this));
   }
   
   /**
-   * 添加元素事件监听器
+   * Add element event listener
    */
   private addElementListener(eventType: string, handler: EventListener): void {
     this.element.addEventListener(eventType, handler, { passive: false });
@@ -187,7 +187,7 @@ export class LocalInputManager {
   }
   
   /**
-   * 移除元素事件监听器
+   * Remove element event listener
    */
   private removeElementListener(eventType: string): void {
     const handler = this.boundHandlers.get(eventType);
@@ -197,7 +197,7 @@ export class LocalInputManager {
     }
   }
   
-  // ========== 事件处理器 ==========
+  // ========== Event Handlers ==========
   
   private handleMouseDown(e: Event): void {
     const mouseEvent = e as MouseEvent;
@@ -222,7 +222,7 @@ export class LocalInputManager {
     const mouseEvent = e as MouseEvent;
     const currentPos = this.getRelativePosition(mouseEvent.clientX, mouseEvent.clientY);
     
-    // 检查是否开始拖拽（需要检查当前按下的按钮是否支持拖拽）
+    // Check if dragging starts (need to check if currently pressed button supports dragging)
     if (this.dragStartPos && !this._isDragging && this.isDragButton(mouseEvent.button)) {
       const distance = Math.hypot(
         currentPos.x - this.dragStartPos.x,
@@ -235,7 +235,7 @@ export class LocalInputManager {
       }
     }
     
-    // 拖拽中
+    // Dragging
     if (this._isDragging) {
       this.emitInputEvent(EventTypes.DRAG, e);
     }
@@ -291,7 +291,7 @@ export class LocalInputManager {
   
   private handleTouchStart(e: Event): void {
     const touchEvent = e as TouchEvent;
-    // 将触摸事件映射为鼠标事件
+    // Map touch events to mouse events
     if (touchEvent.touches.length > 0) {
       const touch = touchEvent.touches[0];
       const mouseEvent = new MouseEvent('mousedown', {
@@ -340,10 +340,10 @@ export class LocalInputManager {
     this.emitInputEvent(EventTypes.BLUR, e);
   }
   
-  // ========== 坐标转换 ==========
+  // ========== Coordinate Conversion ==========
   
   /**
-   * 获取相对元素坐标
+   * Get relative element coordinates
    */
   private getRelativePosition(clientX: number, clientY: number): Position {
     const rect = this.element.getBoundingClientRect();
@@ -354,7 +354,7 @@ export class LocalInputManager {
   }
   
   /**
-   * 获取归一化设备坐标 (NDC)
+   * Get normalized device coordinates (NDC)
    */
   private getNormalizedCoords(x: number, y: number): Position {
     const rect = this.element.getBoundingClientRect();
@@ -365,7 +365,7 @@ export class LocalInputManager {
   }
   
   /**
-   * 创建标准化输入事件
+   * Create standardized input event
    */
   private createInputEvent(type: string, originalEvent: Event): InputEvent {
     const mouseEvent = originalEvent as MouseEvent;
@@ -399,54 +399,54 @@ export class LocalInputManager {
   }
   
   /**
-   * 发出输入事件
+   * Emit input event
    */
   private emitInputEvent(type: string, originalEvent: Event): void {
     const inputEvent = this.createInputEvent(type, originalEvent);
     this.emitEvent(inputEvent);
   }
   
-  // ========== 状态查询 ==========
+  // ========== State Queries ==========
   
   /**
-   * 获取鼠标位置(相对元素)
+   * Get mouse position (relative to element)
    */
   public getMousePosition(): Position {
     return { ...this.lastMousePos };
   }
   
   /**
-   * 获取归一化位置
+   * Get normalized position
    */
   public getNormalizedPosition(): Position {
     return this.getNormalizedCoords(this.lastMousePos.x, this.lastMousePos.y);
   }
   
   /**
-   * 检查是否正在拖拽
+   * Check if currently dragging
    */
   public isDragging(): boolean {
     return this._isDragging;
   }
   
   /**
-   * 检查是否悬停
+   * Check if hovering
    */
   public isHovering(): boolean {
     return this._isHovering;
   }
   
   /**
-   * 获取悬停的元素
+   * Get hovered element
    */
   public getHoveredElement(): HTMLElement | null {
     return this.hoveredElement;
   }
   
-  // ========== 层级管理 ==========
+  // ========== Hierarchy Management ==========
   
   /**
-   * 设置父管理器
+   * Set parent manager
    */
   public setParent(parent: LocalInputManager | null): void {
     if (this.parent) {
@@ -461,76 +461,76 @@ export class LocalInputManager {
   }
   
   /**
-   * 添加子管理器
+   * Add child manager
    */
   public addChild(child: LocalInputManager): void {
     child.setParent(this);
   }
   
   /**
-   * 移除子管理器
+   * Remove child manager
    */
   public removeChild(child: LocalInputManager): void {
     child.setParent(null);
   }
   
   /**
-   * 获取父管理器
+   * Get parent manager
    */
   public getParent(): LocalInputManager | null {
     return this.parent;
   }
   
   /**
-   * 获取所有子管理器
+   * Get all child managers
    */
   public getChildren(): LocalInputManager[] {
     return Array.from(this.children);
   }
   
-  // ========== 上下文控制 ==========
+  // ========== Context Control ==========
   
   /**
-   * 启用管理器
+   * Enable manager
    */
   public enable(): void {
     this.context.enable();
   }
   
   /**
-   * 禁用管理器
+   * Disable manager
    */
   public disable(): void {
     this.context.disable();
   }
   
   /**
-   * 检查是否启用
+   * Check if enabled
    */
   public isEnabled(): boolean {
     return this.context.isEnabled();
   }
   
-  // ========== 全局事件处理 ==========
+  // ========== Global Event Handling ==========
   
   /**
-   * 处理全局事件(由 GlobalInputManager 调用)
+   * Handle global events (called by GlobalInputManager)
    */
   public handleGlobalEvent(_event: Event): void {
-    // 这里可以处理来自全局的事件
-    // 例如键盘事件等
+    // Handle events from global here
+    // Such as keyboard events
   }
   
   /**
-   * 检查是否应该接收事件
+   * Check if should receive event
    */
   public shouldReceiveEvent(event: Event): boolean {
-    // 检查事件是否发生在当前元素内
+    // Check if event occurs within current element
     if (event.target && this.element.contains(event.target as Node)) {
       return true;
     }
     
-    // 对于全局事件(如键盘),总是接收
+    // For global events (like keyboard), always receive
     if (event instanceof KeyboardEvent) {
       return true;
     }
@@ -538,34 +538,34 @@ export class LocalInputManager {
     return false;
   }
   
-  // ========== 清理 ==========
+  // ========== Cleanup ==========
   
   /**
-   * 销毁管理器
+   * Destroy manager
    */
   public dispose(): void {
-    // 移除所有事件监听器
+    // Remove all event listeners
     for (const [eventType] of this.boundHandlers) {
       this.removeElementListener(eventType);
     }
     this.boundHandlers.clear();
     
-    // 清理子管理器
+    // Clean up child managers
     for (const child of this.children) {
       child.dispose();
     }
     this.children.clear();
     
-    // 从父管理器移除
+    // Remove from parent manager
     if (this.parent) {
       this.parent.children.delete(this);
     }
     
-    // 从全局管理器和上下文注销
+    // Unregister from global manager and context
     this.globalManager.unregisterLocalManager(this);
     this.context.removeManager(this);
     
-    // 清理监听器
+    // Clean up listeners
     this.listeners.clear();
   }
 }

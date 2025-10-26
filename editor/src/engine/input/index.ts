@@ -1,10 +1,10 @@
-// 导出所有类型
+// Export all types
 export * from './types';
 
-// 导出核心类
+// Export core classes
 export { GlobalInputManager } from './global-input-manager';
 export { InputContext } from './input-context';
 export { LocalInputManager } from './local-input-manager';
 
-// 导出常用常量
+// Export common constants
 export { EventTypes, Keys, MouseButton } from './types';

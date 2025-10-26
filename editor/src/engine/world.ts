@@ -11,7 +11,8 @@ import { PerspectiveCamera, WebGPURenderer, Scene, Mesh, Color } from 'three/web
 import { LocalInputManager, InputContext } from './input';
 import { OutlineRenderer, OutlineConfig } from './rendering';
 import { OrbitCameraController } from './camera';
-import { ProcessorManager, SelectionProcessor } from './processors';
+import { ProcessorManager, SelectionProcessor, TransformProcessor, UndoRedoProcessor } from './processors';
+import { CommandManager } from './commands';
 
 export class World {
     private readonly camera: PerspectiveCamera;
@@ -29,6 +30,11 @@ export class World {
     // Processor architecture
     private processorManager!: ProcessorManager;
     private selectionProcessor!: SelectionProcessor;
+    private transformProcessor!: TransformProcessor;
+    private undoRedoProcessor!: UndoRedoProcessor;
+    
+    // Command system
+    private commandManager!: CommandManager;
     
     // Time tracking
     private lastFrameTime: number = 0;
@@ -56,13 +62,8 @@ export class World {
         this.animationId = requestAnimationFrame(() => this.animate());
         
         const deltaTime = this.calculateDeltaTime();
-        
         // Update processor layer
-        this.processorManager.update(deltaTime);
-        
-        // Update scene
-        this.updateMeshes();
-        
+        this.processorManager.update(deltaTime);    
         // Render
         await this.render();
     }
@@ -100,6 +101,10 @@ export class World {
             this.processorManager.dispose();
         }
         
+        if (this.commandManager) {
+            this.commandManager.clear();
+        }
+        
         if (this.cameraController) {
             this.cameraController.dispose();
         }
@@ -121,6 +126,9 @@ export class World {
     }
 
     private initializeScene(): void {
+        // Enable all layers for editor camera to see everything
+        this.camera.layers.enableAll();
+        
         const cube = createCube();
         cube.position.set(-2, 0, 0);
         this.addMesh(cube);
@@ -142,8 +150,19 @@ export class World {
         this.renderer.setSize(container.clientWidth, container.clientHeight);
         this.renderer.setPixelRatio(window.devicePixelRatio);
         
-        // Disable right-click context menu on canvas
-        this.renderer.domElement.addEventListener('contextmenu', (e) => {
+        const canvas = this.renderer.domElement;
+  
+        // Make canvas focusable to receive keyboard events
+        canvas.setAttribute('tabindex', '0');
+        canvas.style.outline = 'none';  // Remove focus outline
+
+        // Auto-focus canvas on mouse interaction
+        canvas.addEventListener('mousedown', () => {
+            canvas.focus();
+        });
+        
+        // Disable right-click context menu
+        canvas.addEventListener('contextmenu', (e) => {
             e.preventDefault();
         });
         
@@ -152,14 +171,6 @@ export class World {
 
     private startAnimation(): void {
         this.animate();
-    }
-
-    private updateMeshes(): void {
-        this.meshes.forEach(mesh => {
-            mesh.rotation.x += 0.01;
-            mesh.rotation.y += 0.01;
-            mesh.rotation.z += 0.01;
-        });
     }
 
     private async render(): Promise<void> {
@@ -211,13 +222,20 @@ export class World {
     private initializeProcessors(): void {
         this.processorManager = new ProcessorManager();
         
+        // Initialize command manager
+        this.commandManager = new CommandManager();
+        
         // Add selection processor
         this.selectionProcessor = new SelectionProcessor(this, this.inputManager);
         this.processorManager.addProcessor('selection', this.selectionProcessor);
         
-        // Can add more processors in the future
-        // this.processorManager.addProcessor('gizmo', new GizmoProcessor(...));
-        // this.processorManager.addProcessor('transform', new TransformProcessor(...));
+        // Add transform processor
+        this.transformProcessor = new TransformProcessor(this, this.inputManager);
+        this.processorManager.addProcessor('transform', this.transformProcessor);
+        
+        // Add undo/redo processor
+        this.undoRedoProcessor = new UndoRedoProcessor(this, this.inputManager);
+        this.processorManager.addProcessor('undoRedo', this.undoRedoProcessor);
     }
     
     private initializeOutlineRenderer(container: HTMLElement): void {
@@ -235,12 +253,12 @@ export class World {
     }
     
     private setupInputHandlers(): void {
-        // 输入处理现在由处理器层负责
-        // 这里可以添加其他全局输入处理逻辑
+        // Input handling is now managed by the processor layer
+        // Global input logic can be added here
     }
     
     
-    // 选择逻辑现在由 SelectionProcessor 处理
+    // Selection logic is now handled by SelectionProcessor
     
     public updateOutlineSize(width: number, height: number): void {
         if (this.outlineRenderer) {
@@ -258,7 +276,7 @@ export class World {
         return this.cameraController;
     }
 
-    // 提供访问器供处理器使用
+    // Provide accessors for processors
     public getCamera(): PerspectiveCamera {
         return this.camera;
     }
@@ -267,7 +285,23 @@ export class World {
         return this.scene;
     }
 
+    public getRenderer(): WebGPURenderer {
+        return this.renderer;
+    }
+
     public setSelectedMesh(mesh: Mesh | null): void {
         this.selectedMesh = mesh;
+    }
+
+    public getSelectedMesh(): Mesh | null {
+        return this.selectedMesh;
+    }
+
+    public getCommandManager(): CommandManager {
+        return this.commandManager;
+    }
+
+    public getTransformProcessor(): TransformProcessor {
+        return this.transformProcessor;
     }
 }

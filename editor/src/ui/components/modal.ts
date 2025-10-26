@@ -12,15 +12,15 @@ export abstract class Modal {
     }
 
     private createModal(title: string): void {
-        // 创建遮罩层
+        // Create overlay
         this.overlay = document.createElement('div');
         this.overlay.className = 'modal-overlay';
 
-        // 创建弹窗
+        // Create modal
         this.modal = document.createElement('div');
         this.modal.className = 'modal';
 
-        // 创建标题栏
+        // Create title bar
         this.header = document.createElement('div');
         this.header.className = 'modal-header';
 
@@ -35,7 +35,7 @@ export abstract class Modal {
         this.header.appendChild(titleElement);
         this.header.appendChild(this.closeButton);
 
-        // 创建内容区域
+        // Create content area
         this.content = document.createElement('div');
         this.content.className = 'modal-content';
 
@@ -46,17 +46,17 @@ export abstract class Modal {
     }
 
     private bindEvents(): void {
-        // 关闭按钮事件
+        // Close button event
         this.closeButton.addEventListener('click', () => this.hide());
 
-        // 点击遮罩层关闭
+        // Click overlay to close
         this.overlay.addEventListener('click', (e) => {
             if (e.target === this.overlay) {
                 this.hide();
             }
         });
 
-        // ESC 键关闭
+        // ESC key to close
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && this.isVisible) {
                 this.hide();
@@ -72,7 +72,7 @@ export abstract class Modal {
         this.renderContent();
         document.body.appendChild(this.overlay);
         
-        // 触发动画
+        // Trigger animation
         requestAnimationFrame(() => {
             this.overlay.classList.add('show');
         });
@@ -100,7 +100,7 @@ export abstract class Modal {
 
     public dispose(): void {
         this.hide();
-        // 清理事件监听器
+        // Clean up event listeners
         document.removeEventListener('keydown', this.handleKeyDown);
     }
 

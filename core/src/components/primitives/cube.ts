@@ -4,24 +4,35 @@ import {
     Mesh, 
     MeshStandardMaterial 
 } from 'three/webgpu';
+import { Layers, SelectionCategory } from '../../engine';
 
 
 export type CubeSize = number | [number, number, number];
 
 export function createCube(
     size: CubeSize = [1, 1, 1], 
-    color: string = 'purple'
+    color: string = 'purple',
+    layer: number = Layers.DEFAULT
 ): Mesh {
     const dimensions = _normalizeDimensions(size);
     const geometry = new BoxGeometry(...dimensions);
     const material = new MeshStandardMaterial({ color });
-    return new Mesh(geometry, material);
+    const mesh = new Mesh(geometry, material);
+    
+    // Set rendering layer
+    mesh.layers.set(layer);
+    
+    // Mark as selectable scene object
+    mesh.userData.selectionCategory = SelectionCategory.SCENE_OBJECT;
+    
+    return mesh;
 }
 
 export function createSphere(
     radius: number = 1,
     segments: number = 32,
-    color: string = 'orange'
+    color: string = 'orange',
+    layer: number = Layers.DEFAULT
 ): Mesh {
     // Parameter validation
     if (radius <= 0) {
@@ -36,7 +47,15 @@ export function createSphere(
     
     const geometry = new SphereGeometry(radius, segments, segments);
     const material = new MeshStandardMaterial({ color });
-    return new Mesh(geometry, material);
+    const mesh = new Mesh(geometry, material);
+    
+    // Set rendering layer
+    mesh.layers.set(layer);
+    
+    // Mark as selectable scene object
+    mesh.userData.selectionCategory = SelectionCategory.SCENE_OBJECT;
+    
+    return mesh;
 }
 
 function _normalizeDimensions(size: CubeSize): [number, number, number] {

@@ -38,7 +38,7 @@ export class Resizer {
         this._renderer.setSize(width, height);
         this._renderer.setPixelRatio(window.devicePixelRatio);
         
-        // 调用 resize 回调
+        // Call resize callback
         if (this._resizeCallback) {
             this._resizeCallback(width, height);
         }

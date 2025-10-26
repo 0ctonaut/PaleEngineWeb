@@ -1,6 +1,7 @@
 import { Mesh, Raycaster, Vector2 } from 'three';
 import { InputProcessor } from './input-processor';
 import { EventTypes, InputEvent } from '../input';
+import { SelectionCategory } from '@paleengine/core';
 
 export class SelectionProcessor extends InputProcessor {
     private mouseDownPosition: { x: number; y: number } | null = null;
@@ -11,6 +12,7 @@ export class SelectionProcessor extends InputProcessor {
     constructor(world: any, inputManager: any) {
         super(world, inputManager);
         this.raycaster = new Raycaster();
+        this.setupInputHandlers();
     }
 
     protected setupInputHandlers(): void {
@@ -58,8 +60,15 @@ export class SelectionProcessor extends InputProcessor {
         this.raycaster.setFromCamera(vector2, camera);
         const intersects = this.raycaster.intersectObjects(scene.children, true);
 
-        if (intersects.length > 0) {
-            this.selectMesh(intersects[0].object as Mesh);
+        // Find first selectable object (filter out UI helpers like gizmo)
+        const selectableIntersect = intersects.find(intersect => {
+            const category = intersect.object.userData.selectionCategory;
+            // If no category set, default is selectable
+            return category === SelectionCategory.SCENE_OBJECT || !category;
+        });
+
+        if (selectableIntersect) {
+            this.selectMesh(selectableIntersect.object as Mesh);
         } else {
             this.deselectMesh();
         }

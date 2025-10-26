@@ -9,7 +9,7 @@ export abstract class InputProcessor {
     constructor(world: World, inputManager: LocalInputManager) {
         this.world = world;
         this.inputManager = inputManager;
-        this.setupInputHandlers();
+        // Let subclasses control when to set up input handlers
     }
 
     protected abstract setupInputHandlers(): void;
