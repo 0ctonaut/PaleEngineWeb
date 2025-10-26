@@ -9,7 +9,7 @@ import {
 } from '@paleengine/core';
 import { PerspectiveCamera, WebGPURenderer, Scene, Mesh, Color } from 'three/webgpu';
 import { LocalInputManager, InputContext } from './input';
-import { OutlineRenderer, OutlineConfig } from './rendering';
+import { OutlineRenderer, OutlineConfig, ViewHelperGizmo } from './rendering';
 import { OrbitCameraController } from './camera';
 import { ProcessorManager, SelectionProcessor, TransformProcessor, UndoRedoProcessor } from './processors';
 import { CommandManager } from './commands';
@@ -26,6 +26,8 @@ export class World {
     private outlineRenderer!: OutlineRenderer;
     private resizer!: Resizer;
     private cameraController!: OrbitCameraController;
+    private viewHelperGizmo!: ViewHelperGizmo;
+    private container!: HTMLElement;
     
     // Processor architecture
     private processorManager!: ProcessorManager;
@@ -40,6 +42,7 @@ export class World {
     private lastFrameTime: number = 0;
 
     public constructor(container: HTMLElement) {
+        this.container = container;
         this.camera = createCamera(75, 1, 0.1, 1000, [0, 0, 10]);
         this.scene = createScene();
         this.renderer = createRenderer();
@@ -48,6 +51,7 @@ export class World {
         this.initializeCameraController();
         this.initializeProcessors();
         this.initializeOutlineRenderer(container);
+        this.initializeViewHelperGizmo();
         
         this.resizer = new Resizer(container, this.camera, this.renderer, (width: number, height: number) => {
             this.updateOutlineSize(width, height);
@@ -55,6 +59,8 @@ export class World {
         
         this.initializeScene();
         this.setupRenderer(container);
+        this.setupGizmoLabelContainer(container);
+        this.setupGizmoClickHandler();
         this.startAnimation();
     }
 
@@ -91,6 +97,10 @@ export class World {
         
         if (this.outlineRenderer) {
             this.outlineRenderer.dispose();
+        }
+        
+        if (this.viewHelperGizmo) {
+            this.viewHelperGizmo.dispose();
         }
         
         if (this.resizer) {
@@ -174,12 +184,40 @@ export class World {
     }
 
     private async render(): Promise<void> {
+        const width = this.container.clientWidth;
+        const height = this.container.clientHeight;
+        
+        // 1. main
+        this.renderer.setViewport(0, 0, width, height);
         await this.outlineRenderer.render(
             this.renderer,
             this.scene,
             this.camera,
             this.selectedMesh ? [this.selectedMesh] : []
         );
+        
+        // 2. Sync Gizmo with main camera
+        this.viewHelperGizmo.syncWithCamera(this.camera.quaternion);
+        
+        // 3. Render Gizmo (top-right corner)
+        const gizmoSize = 128;
+        const padding = 20;
+        const gizmoX = width - gizmoSize - padding;  // Right aligned
+        const gizmoY = padding;  // Top aligned
+        
+        // Sync label position
+        this.viewHelperGizmo.setLabelPosition(gizmoX, gizmoY);
+        
+        // Enable scissor test, limit render area
+        this.renderer.setScissorTest(true);
+        this.renderer.setScissor(gizmoX, gizmoY, gizmoSize, gizmoSize);
+        this.renderer.setViewport(gizmoX, gizmoY, gizmoSize, gizmoSize);
+        this.renderer.clearDepth();
+        await this.viewHelperGizmo.render(this.renderer);
+        
+        // 4. Restore full viewport and state
+        this.renderer.setScissorTest(false);
+        this.renderer.setViewport(0, 0, width, height);
     }
     
     private initializeInputSystem(container: HTMLElement): void {
@@ -250,6 +288,51 @@ export class World {
             container.clientHeight,
             outlineConfig
         );
+    }
+    
+    private initializeViewHelperGizmo(): void {
+        this.viewHelperGizmo = new ViewHelperGizmo({
+            size: 0.5
+        });
+    }
+    
+    private setupGizmoClickHandler(): void {
+        const canvas = this.renderer.domElement;
+        
+        canvas.addEventListener('click', (event: MouseEvent) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            
+            const gizmoSize = 128;
+            const padding = 20;
+            const width = this.container.clientWidth;
+            
+            // Check if click is in Gizmo area
+            const gizmoX = width - gizmoSize - padding;
+            const gizmoY = padding;
+            
+            if (x >= gizmoX && x <= gizmoX + gizmoSize &&
+                y >= gizmoY && y <= gizmoY + gizmoSize) {
+                
+                // Convert coordinates to local coordinates relative to Gizmo
+                const localX = x - gizmoX;
+                const localY = y - gizmoY;
+                
+                const direction = this.viewHelperGizmo.handleClick(localX, localY, gizmoSize);
+                
+                if (direction !== null) {
+                    const params = ViewHelperGizmo.getViewParameters(direction, this.cameraController.getDistance());
+                    this.cameraController.setAngles(params.azimuth, params.polar);
+                }
+            }
+        });
+    }
+    
+    private setupGizmoLabelContainer(container: HTMLElement): void {
+        // Add Gizmo label container to scene container
+        const labelContainer = this.viewHelperGizmo.getLabelContainer();
+        container.appendChild(labelContainer);
     }
     
     private setupInputHandlers(): void {
