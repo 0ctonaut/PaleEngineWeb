@@ -26,7 +26,9 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc && vite build",
+    "clean": "pnpm exec tsc --build --clean",
+    "build": "tsc --build && vite build",
+    "build:force": "npm run clean && tsc --build --force && vite build",
     "dev": "vite build --watch",
     "type-check": "tsc --noEmit"
   },

@@ -10,13 +10,15 @@
   "scripts": {
     "dev": "pnpm run --parallel dev",
     "build": "pnpm run --recursive build",
+    "build:clean": "pnpm run --recursive clean && pnpm run --recursive build",
     "build:core": "pnpm --filter @paleengine/core build",
     "build:editor": "pnpm --filter @paleengine/editor build",
     "dev:core": "pnpm --filter @paleengine/core dev",
     "dev:editor": "pnpm --filter @paleengine/editor dev",
     "dev:full": "pnpm build:core && pnpm dev:editor",
     "start": "pnpm build:core && pnpm dev:editor",
-    "type-check": "pnpm run --recursive type-check"
+    "type-check": "pnpm run --recursive type-check",
+    "clean": "pnpm run --recursive clean"
   },
   "repository": {
     "type": "git",

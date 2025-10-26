@@ -7,7 +7,8 @@ export default defineConfig({
     open: true
   },
   build: {
-    outDir: 'dist'
+    outDir: 'dist',
+    emptyOutDir: false
   },
   resolve: {
     dedupe: ['three', 'three/webgpu'],

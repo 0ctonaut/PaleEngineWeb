@@ -43,7 +43,7 @@ export class World {
         this.initializeProcessors();
         this.initializeOutlineRenderer(container);
         
-        this.resizer = new Resizer(container, this.camera, this.renderer, (width, height) => {
+        this.resizer = new Resizer(container, this.camera, this.renderer, (width: number, height: number) => {
             this.updateOutlineSize(width, height);
         });
         

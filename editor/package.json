@@ -4,8 +4,10 @@
   "description": "PaleEngine Editor - Default editor interface for PaleEngine Core",
   "type": "module",
   "scripts": {
+    "clean": "pnpm exec tsc --build --clean",
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc --build && vite build",
+    "build:force": "npm run clean && tsc --build --force && vite build",
     "preview": "vite preview"
   },
   "dependencies": {

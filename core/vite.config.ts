@@ -17,6 +17,7 @@ export default defineConfig({
         }
       }
     },
-    outDir: 'dist'
+    outDir: 'dist',
+    emptyOutDir: false
   }
 })
