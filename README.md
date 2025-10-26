@@ -1,5 +1,9 @@
 # PaleEngine
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9+-blue.svg)](https://www.typescriptlang.org/)
+[![WebGPU](https://img.shields.io/badge/WebGPU-Experimental-orange.svg)](https://developer.mozilla.org/en-US/docs/Web/API/WebGPU_API)
+
 A modern 3D engine based on Three.js and WebGPU, using monorepo architecture with core engine and editor packages.
 
 ## Prerequisites
@@ -144,3 +148,21 @@ if ('gpu' in navigator) {
 - **WebGPU**: Modern graphics API
 - **Vite**: Fast build tool
 - **pnpm**: Efficient package manager
+
+## License
+
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+
+### What this means:
+
+- ✅ **Free to use**: You can run, study, and modify the software
+- ✅ **Free to distribute**: You can share copies of the software
+- ✅ **Free to improve**: You can distribute modified versions
+- ⚠️ **Copyleft**: Modified versions must also be GPL-3.0 licensed
+- ⚠️ **Source required**: You must provide source code when distributing
+
+For more information about GPL-3.0, visit: https://www.gnu.org/licenses/gpl-3.0.html
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request. By contributing to this project, you agree that your contributions will be licensed under the same GPL-3.0 license.

@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "description": "PaleEngine Editor - Default editor interface for PaleEngine Core",
   "type": "module",
+  "author": "0ctonaut",
+  "license": "GPL-3.0",
   "scripts": {
     "clean": "pnpm exec tsc --build --clean",
     "dev": "vite",
