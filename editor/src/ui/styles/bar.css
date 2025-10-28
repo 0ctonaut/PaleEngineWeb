@@ -1,0 +1,186 @@
+/* Bar 基类样式 */
+
+/* 通用 Bar 样式 */
+.bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 顶部栏 */
+.bar-top {
+    top: 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* 底部栏 */
+.bar-bottom {
+    bottom: 0;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* 标签容器 - 横向排列 */
+.bar-tabs {
+    display: flex;
+    align-items: stretch;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+/* 标签头部 - 自适应宽度 */
+.tab-header {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 12px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.tab-header:hover {
+    background: rgba(0, 0, 0, 0.03);
+}
+
+.tab-header.active {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+/* 标签切换按钮 */
+.tab-toggle {
+    background: none;
+    border: none;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #666;
+    transition: all 0.2s ease;
+    margin-left: auto;
+}
+
+.tab-toggle:hover {
+    color: #333;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+}
+
+/* 内容容器 */
+.bar-content {
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+/* 当没有内容时隐藏整个容器 */
+.bar-content:empty {
+    display: none;
+}
+
+/* ===== Follow 模式（跟随）===== */
+.bar.mode-follow {
+    transition: transform 0.3s ease;
+}
+
+.bar.mode-follow .bar-tabs {
+    height: 32px;
+}
+
+.bar.mode-follow .tab-header {
+    height: 32px;
+    border-right: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.bar.mode-follow .tab-header.active {
+    border-bottom: 2px solid #2196F3;
+}
+
+.bar.mode-follow .bar-content {
+    max-height: 450px;
+}
+
+.bar.mode-follow .bar-content:not(:empty) {
+    max-height: 450px;
+    overflow-y: auto;
+}
+
+/* 底部栏跟随模式 - 向上移动 */
+.bar-bottom.mode-follow.expanded {
+    transform: translateY(-450px);
+}
+
+/* 顶部栏跟随模式 - 向下移动 */
+.bar-top.mode-follow.expanded {
+    transform: translateY(450px);
+}
+
+/* ===== Fixed 模式（固定/类似 Popover）===== */
+.bar.mode-fixed {
+    height: 32px;
+}
+
+.bar.mode-fixed .bar-tabs {
+    height: 32px;
+}
+
+.bar.mode-fixed .tab-header {
+    height: 32px;
+    border-right: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.bar.mode-fixed .tab-header.active {
+    border-bottom: 2px solid #2196F3;
+}
+
+.bar.mode-fixed .bar-content {
+    position: absolute;
+    bottom: 32px;
+    left: 0;
+    right: 0;
+    max-height: 450px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+    overflow-y: auto;
+}
+
+.bar.mode-fixed .bar-content:empty {
+    display: none;
+}
+
+.bar.mode-fixed .bar-content:not(:empty) {
+    display: block;
+}
+
+/* 顶部栏固定模式 - 内容在下方 */
+.bar-top.mode-fixed .bar-content {
+    top: 32px;
+    bottom: auto;
+}
+
+/* 底部栏固定模式 - 内容在上方（已设置） */
+
+/* 滚动条样式 */
+.bar-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.bar-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.bar-content::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+}
+
+.bar-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.3);
+}

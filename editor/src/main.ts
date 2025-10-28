@@ -1,5 +1,6 @@
 import { World } from './engine/world';
-import { Toolbar } from './ui';
+import { Toolbar, BottomBar } from './ui';
+import { ProfilerPanel } from './ui/components/profiler-panel';
 
 function main(): void {
     try {
@@ -24,6 +25,12 @@ function main(): void {
         // Initialize UI
         const toolbar = new Toolbar(world.getCameraController());
         toolbarContainer.appendChild(toolbar.getElement());
+        
+        // Initialize Bottom Bar with tabs (使用 fixed 模式，标题固定在 bar 上)
+        const bottomBar = new BottomBar('fixed');
+        const profilerPanel = new ProfilerPanel(world.getPerformanceMonitor());
+        bottomBar.addTab(profilerPanel);
+        document.body.appendChild(bottomBar.getElement());
         
         console.log('PaleEngine Editor initialized successfully');
         
