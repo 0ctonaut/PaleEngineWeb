@@ -159,31 +159,19 @@ export class ViewHelperGizmo {
         }
     }
     
-    /**
-     * Sync Gizmo rotation with main camera
-     */
     public syncWithCamera(quaternion: Quaternion): void {
         this.gizmoGroup.quaternion.copy(quaternion).invert();
     }
     
-    /**
-     * Set label container position
-     */
     public setLabelPosition(gizmoX: number, gizmoY: number): void {
         this.labelContainer.style.top = `${gizmoY}px`;
         this.labelContainer.style.left = `${gizmoX}px`;
     }
     
-    /**
-     * Get label container for DOM attachment
-     */
     public getLabelContainer(): HTMLElement {
         return this.labelContainer;
     }
     
-    /**
-     * Render Gizmo scene
-     */
     public async render(renderer: any): Promise<void> {
         const autoClear = renderer.autoClear;
         renderer.autoClear = false;
@@ -194,9 +182,6 @@ export class ViewHelperGizmo {
         this.labelRenderer.render(this.scene, this.camera);
     }
     
-    /**
-     * Handle mouse click, return the direction of the clicked sphere
-     */
     public handleClick(mouseX: number, mouseY: number, viewportSize: number): ViewDirection | null {
         // Convert mouse coordinates to Gizmo viewport space (-1 to 1)
         const x = (mouseX / viewportSize) * 2 - 1;

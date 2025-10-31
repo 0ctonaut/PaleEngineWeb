@@ -8,8 +8,16 @@ import {
     Resizer 
 } from '@paleengine/core';
 import { PerspectiveCamera, WebGPURenderer, Scene, Mesh, Color } from 'three/webgpu';
-import { LocalInputManager, InputContext } from './input';
-import { OutlineRenderer, OutlineConfig, ViewHelperGizmo } from './rendering';
+import { LocalInputManager, InputContext, EventTypes, InputEvent } from './input';
+import { 
+    OutlineRenderer, 
+    OutlineConfig, 
+    ViewHelperGizmo,
+    PassManager,
+    MainRenderPass,
+    ViewHelperGizmoPass,
+    GridPass
+} from './rendering';
 import { OrbitCameraController } from './camera';
 import { ProcessorManager, SelectionProcessor, TransformProcessor, UndoRedoProcessor } from './processors';
 import { CommandManager } from './commands';
@@ -26,8 +34,14 @@ export class World {
     private outlineRenderer!: OutlineRenderer;
     private resizer!: Resizer;
     private cameraController!: OrbitCameraController;
-    private viewHelperGizmo!: ViewHelperGizmo;
     private container!: HTMLElement;
+    
+    // Pass system
+    private passManager!: PassManager;
+    private mainRenderPass!: MainRenderPass;
+    private viewHelperGizmoPass!: ViewHelperGizmoPass;
+    // @ts-expect-error - Reserved for future use
+    private gridPass!: GridPass;
     
     // Processor architecture
     private processorManager!: ProcessorManager;
@@ -49,18 +63,15 @@ export class World {
         
         this.initializeInputSystem(container);
         this.initializeCameraController();
-        this.initializeProcessors();
         this.initializeOutlineRenderer(container);
-        this.initializeViewHelperGizmo();
+        this.initializePassSystem();
         
         this.resizer = new Resizer(container, this.camera, this.renderer, (width: number, height: number) => {
-            this.updateOutlineSize(width, height);
+            this.updateRenderSize(width, height);
         });
         
         this.initializeScene();
         this.setupRenderer(container);
-        this.setupGizmoLabelContainer(container);
-        this.setupGizmoClickHandler();
         this.startAnimation();
     }
 
@@ -68,9 +79,7 @@ export class World {
         this.animationId = requestAnimationFrame(() => this.animate());
         
         const deltaTime = this.calculateDeltaTime();
-        // Update processor layer
-        this.processorManager.update(deltaTime);    
-        // Render
+        this.processorManager.update(deltaTime);
         await this.render();
     }
 
@@ -99,8 +108,8 @@ export class World {
             this.outlineRenderer.dispose();
         }
         
-        if (this.viewHelperGizmo) {
-            this.viewHelperGizmo.dispose();
+        if (this.passManager) {
+            this.passManager.dispose();
         }
         
         if (this.resizer) {
@@ -161,20 +170,8 @@ export class World {
         this.renderer.setPixelRatio(window.devicePixelRatio);
         
         const canvas = this.renderer.domElement;
-  
-        // Make canvas focusable to receive keyboard events
         canvas.setAttribute('tabindex', '0');
-        canvas.style.outline = 'none';  // Remove focus outline
-
-        // Auto-focus canvas on mouse interaction
-        canvas.addEventListener('mousedown', () => {
-            canvas.focus();
-        });
-        
-        // Disable right-click context menu
-        canvas.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-        });
+        canvas.style.outline = 'none';
         
         container.append(this.renderer.domElement);
     }
@@ -187,37 +184,8 @@ export class World {
         const width = this.container.clientWidth;
         const height = this.container.clientHeight;
         
-        // 1. main
         this.renderer.setViewport(0, 0, width, height);
-        await this.outlineRenderer.render(
-            this.renderer,
-            this.scene,
-            this.camera,
-            this.selectedMesh ? [this.selectedMesh] : []
-        );
-        
-        // 2. Sync Gizmo with main camera
-        this.viewHelperGizmo.syncWithCamera(this.camera.quaternion);
-        
-        // 3. Render Gizmo (top-right corner)
-        const gizmoSize = 128;
-        const padding = 20;
-        const gizmoX = width - gizmoSize - padding;  // Right aligned
-        const gizmoY = padding;  // Top aligned
-        
-        // Sync label position
-        this.viewHelperGizmo.setLabelPosition(gizmoX, gizmoY);
-        
-        // Enable scissor test, limit render area
-        this.renderer.setScissorTest(true);
-        this.renderer.setScissor(gizmoX, gizmoY, gizmoSize, gizmoSize);
-        this.renderer.setViewport(gizmoX, gizmoY, gizmoSize, gizmoSize);
-        this.renderer.clearDepth();
-        await this.viewHelperGizmo.render(this.renderer);
-        
-        // 4. Restore full viewport and state
-        this.renderer.setScissorTest(false);
-        this.renderer.setViewport(0, 0, width, height);
+        await this.passManager.render(this.renderer, this.scene, this.camera);
     }
     
     private initializeInputSystem(container: HTMLElement): void {
@@ -227,20 +195,32 @@ export class World {
         });
         this.canvasInputContext.activate();
         
-        // raycaster now managed by SelectionProcessor
-        
         this.inputManager = new LocalInputManager(
             container,
             this.canvasInputContext,
             {
                 dragConfig: {
                     threshold: 5,
-                    button: [0, 2] // Support left(0) and right(2) button dragging
+                    button: [0, 2]
                 }
             }
         );
         
+        // Setup World-level input handlers before processors register their handlers
+        // This ensures World handlers execute first (Set iteration order is insertion order)
         this.setupInputHandlers();
+        
+        this.processorManager = new ProcessorManager();
+        this.commandManager = new CommandManager();
+        
+        this.selectionProcessor = new SelectionProcessor(this, this.inputManager);
+        this.processorManager.addProcessor('selection', this.selectionProcessor);
+        
+        this.transformProcessor = new TransformProcessor(this, this.inputManager);
+        this.processorManager.addProcessor('transform', this.transformProcessor);
+        
+        this.undoRedoProcessor = new UndoRedoProcessor(this, this.inputManager);
+        this.processorManager.addProcessor('undoRedo', this.undoRedoProcessor);
     }
     
     private initializeCameraController(): void {
@@ -255,25 +235,6 @@ export class World {
                 maxDistance: 100
             }
         );
-    }
-
-    private initializeProcessors(): void {
-        this.processorManager = new ProcessorManager();
-        
-        // Initialize command manager
-        this.commandManager = new CommandManager();
-        
-        // Add selection processor
-        this.selectionProcessor = new SelectionProcessor(this, this.inputManager);
-        this.processorManager.addProcessor('selection', this.selectionProcessor);
-        
-        // Add transform processor
-        this.transformProcessor = new TransformProcessor(this, this.inputManager);
-        this.processorManager.addProcessor('transform', this.transformProcessor);
-        
-        // Add undo/redo processor
-        this.undoRedoProcessor = new UndoRedoProcessor(this, this.inputManager);
-        this.processorManager.addProcessor('undoRedo', this.undoRedoProcessor);
     }
     
     private initializeOutlineRenderer(container: HTMLElement): void {
@@ -290,60 +251,63 @@ export class World {
         );
     }
     
-    private initializeViewHelperGizmo(): void {
-        this.viewHelperGizmo = new ViewHelperGizmo({
-            size: 0.5
-        });
-    }
-    
-    private setupGizmoClickHandler(): void {
-        const canvas = this.renderer.domElement;
+    private initializePassSystem(): void {
+        this.passManager = new PassManager();
         
-        canvas.addEventListener('click', (event: MouseEvent) => {
-            const rect = canvas.getBoundingClientRect();
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
-            
-            const gizmoSize = 128;
-            const padding = 20;
-            const width = this.container.clientWidth;
-            
-            // Check if click is in Gizmo area
-            const gizmoX = width - gizmoSize - padding;
-            const gizmoY = padding;
-            
-            if (x >= gizmoX && x <= gizmoX + gizmoSize &&
-                y >= gizmoY && y <= gizmoY + gizmoSize) {
-                
-                // Convert coordinates to local coordinates relative to Gizmo
-                const localX = x - gizmoX;
-                const localY = y - gizmoY;
-                
-                const direction = this.viewHelperGizmo.handleClick(localX, localY, gizmoSize);
-                
-                if (direction !== null) {
-                    const params = ViewHelperGizmo.getViewParameters(direction, this.cameraController.getDistance());
-                    this.cameraController.setAngles(params.azimuth, params.polar);
-                }
-            }
+        this.mainRenderPass = new MainRenderPass(this.outlineRenderer, this.scene, this.camera);
+        this.passManager.addPass('main', this.mainRenderPass);
+        
+        this.gridPass = new GridPass({
+            cellSize: 50,
+            color: new Color(0x666666),
+            lineWidth: 1.5,
+            opacity: 0.5,
+            showMajorGrid: true,
+            majorGridInterval: 5,
+            majorGridColor: new Color(0x888888),
+            majorGridLineWidth: 2.0
         });
-    }
-    
-    private setupGizmoLabelContainer(container: HTMLElement): void {
-        // Add Gizmo label container to scene container
-        const labelContainer = this.viewHelperGizmo.getLabelContainer();
-        container.appendChild(labelContainer);
+        
+        this.viewHelperGizmoPass = new ViewHelperGizmoPass(this.camera);
+        this.passManager.addPass('gizmo', this.viewHelperGizmoPass);
+        
+        const width = this.container.clientWidth;
+        const height = this.container.clientHeight;
+        this.passManager.setSize(width, height);
+        
+        const labelContainer = this.viewHelperGizmoPass.getLabelContainer();
+        this.container.appendChild(labelContainer);
     }
     
     private setupInputHandlers(): void {
-        // Input handling is now managed by the processor layer
-        // Global input logic can be added here
+        // Gizmo click handling - use MOUSE_UP to execute before SelectionProcessor
+        // World handlers are registered first, so they execute before processor handlers
+        this.inputManager.on(EventTypes.MOUSE_UP, (event: InputEvent) => {
+            const direction = this.viewHelperGizmoPass.handleClick(event.position.x, event.position.y);
+            
+            if (direction !== null) {
+                event.stopPropagation();
+                
+                const params = ViewHelperGizmo.getViewParameters(direction, this.cameraController.getDistance());
+                this.cameraController.setAngles(params.azimuth, params.polar);
+            }
+        });
+        
+        this.inputManager.on(EventTypes.MOUSE_DOWN, (_event: InputEvent) => {
+            const canvas = this.renderer.domElement;
+            canvas.focus();
+        });
+        
+        this.inputManager.on(EventTypes.CONTEXT_MENU, (event: InputEvent) => {
+            event.preventDefault();
+        });
     }
     
-    
-    // Selection logic is now handled by SelectionProcessor
-    
-    public updateOutlineSize(width: number, height: number): void {
+    public updateRenderSize(width: number, height: number): void {
+        if (this.passManager) {
+            this.passManager.setSize(width, height);
+        }
+        
         if (this.outlineRenderer) {
             this.outlineRenderer.setSize(width, height);
         }
@@ -359,7 +323,6 @@ export class World {
         return this.cameraController;
     }
 
-    // Provide accessors for processors
     public getCamera(): PerspectiveCamera {
         return this.camera;
     }
@@ -374,6 +337,9 @@ export class World {
 
     public setSelectedMesh(mesh: Mesh | null): void {
         this.selectedMesh = mesh;
+        if (this.mainRenderPass) {
+            this.mainRenderPass.setSelectedMesh(mesh);
+        }
     }
 
     public getSelectedMesh(): Mesh | null {
