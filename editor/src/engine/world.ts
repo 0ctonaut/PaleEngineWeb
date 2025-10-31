@@ -21,6 +21,7 @@ import {
 import { OrbitCameraController } from './camera';
 import { ProcessorManager, SelectionProcessor, TransformProcessor, UndoRedoProcessor } from './processors';
 import { CommandManager } from './commands';
+import { PerformanceMonitor } from './profiler';
 
 export class World {
     private readonly camera: PerspectiveCamera;
@@ -54,12 +55,18 @@ export class World {
     
     // Time tracking
     private lastFrameTime: number = 0;
+    
+    // Performance monitoring
+    private performanceMonitor!: PerformanceMonitor;
 
     public constructor(container: HTMLElement) {
         this.container = container;
         this.camera = createCamera(75, 1, 0.1, 1000, [0, 0, 10]);
         this.scene = createScene();
         this.renderer = createRenderer();
+        
+        // Initialize performance monitor
+        this.performanceMonitor = new PerformanceMonitor();
         
         this.initializeInputSystem(container);
         this.initializeCameraController();
@@ -79,7 +86,8 @@ export class World {
         this.animationId = requestAnimationFrame(() => this.animate());
         
         const deltaTime = this.calculateDeltaTime();
-        this.processorManager.update(deltaTime);
+        this.performanceMonitor.update();
+        this.processorManager.update(deltaTime);    
         await this.render();
     }
 
@@ -352,5 +360,9 @@ export class World {
 
     public getTransformProcessor(): TransformProcessor {
         return this.transformProcessor;
+    }
+
+    public getPerformanceMonitor(): PerformanceMonitor {
+        return this.performanceMonitor;
     }
 }

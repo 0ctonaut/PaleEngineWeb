@@ -1,0 +1,27 @@
+/* Bottom Drawer Styles - 保留用于向后兼容 */
+
+/* 标签内容样式 */
+.tab-content {
+    padding: 12px;
+    max-height: calc(450px - 32px);
+    overflow-y: auto;
+}
+
+/* 滚动条样式 */
+.tab-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.tab-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.tab-content::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+}
+
+.tab-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.3);
+}
+
