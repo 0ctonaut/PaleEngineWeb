@@ -1,4 +1,5 @@
-import { PerspectiveCamera, Vector3 } from 'three/webgpu';
+import { PerspectiveCamera, Vector3, Spherical } from 'three/webgpu';
+import { clamp } from 'three/src/math/MathUtils.js';
 
 import { CameraController } from './camera-controller';
 import { EventTypes, InputEvent, LocalInputManager } from '../input';
@@ -13,17 +14,21 @@ export interface OrbitControllerConfig {
     maxPolarAngle?: number;
 }
 
+// Epsilon value for preventing gimbal lock at poles (same as ViewportGizmo)
+const EPSILON = 1e-6;
+
 export class OrbitCameraController extends CameraController {
     private inputManager: LocalInputManager;
     private target: Vector3 = new Vector3(0, 0, 0);
-    private distance: number = 10;
-    private azimuthAngle: number = 0; // Azimuth angle (around Y axis)
-    private polarAngle: number = Math.PI / 2; // Polar angle (angle with Y axis)
+    private spherical: Spherical = new Spherical();
     
     private config: Required<OrbitControllerConfig>;
     
     // Drag operation type tracking
     private dragType: 'rotate' | 'pan' | null = null;
+    
+    // Temporary vectors for calculations
+    private _direction = new Vector3();
 
     constructor(
         camera: PerspectiveCamera,
@@ -39,10 +44,21 @@ export class OrbitCameraController extends CameraController {
             zoomSensitivity: 0.1,
             minDistance: 1,
             maxDistance: 100,
-            minPolarAngle: 0.1,
-            maxPolarAngle: Math.PI - 0.1,
+            minPolarAngle: EPSILON,
+            maxPolarAngle: Math.PI - EPSILON,
             ...config
         };
+
+        // Initialize spherical coordinates from camera position
+        this._direction.subVectors(this.camera.position, this.target);
+        this.spherical.setFromVector3(this._direction);
+        
+        // Clamp phi to safe range
+        this.spherical.phi = clamp(
+            this.spherical.phi,
+            Math.max(EPSILON, this.config.minPolarAngle),
+            Math.min(Math.PI - EPSILON, this.config.maxPolarAngle)
+        );
 
         this.setupEventListeners();
         this.updateCameraPosition();
@@ -93,20 +109,25 @@ export class OrbitCameraController extends CameraController {
         const wheelEvent = event.originalEvent as WheelEvent;
         const zoomDelta = wheelEvent.deltaY > 0 ? 1 + this.config.zoomSensitivity : 1 - this.config.zoomSensitivity;
         
-        this.distance *= zoomDelta;
-        this.distance = Math.max(this.config.minDistance, Math.min(this.config.maxDistance, this.distance));
+        this.spherical.radius *= zoomDelta;
+        this.spherical.radius = clamp(
+            this.spherical.radius,
+            this.config.minDistance,
+            this.config.maxDistance
+        );
         
         this.updateCameraPosition();
     }
 
     private handleRotate(deltaX: number, deltaY: number): void {
-        this.azimuthAngle -= deltaX * this.config.rotateSensitivity;
-        this.polarAngle -= deltaY * this.config.rotateSensitivity;
+        // Update spherical coordinates
+        this.spherical.theta -= deltaX * this.config.rotateSensitivity;
+        this.spherical.phi -= deltaY * this.config.rotateSensitivity;
         
-        this.polarAngle = Math.max(
-            this.config.minPolarAngle,
-            Math.min(this.config.maxPolarAngle, this.polarAngle)
-        );
+        // Clamp phi to safe range to prevent gimbal lock
+        const minPhi = Math.max(EPSILON, this.config.minPolarAngle);
+        const maxPhi = Math.min(Math.PI - EPSILON, this.config.maxPolarAngle);
+        this.spherical.phi = clamp(this.spherical.phi, minPhi, maxPhi);
         
         this.updateCameraPosition();
     }
@@ -115,15 +136,14 @@ export class OrbitCameraController extends CameraController {
         const right = new Vector3();
         const up = new Vector3();
         
-        const direction = new Vector3();
-        this.camera.getWorldDirection(direction);
+        this.camera.getWorldDirection(this._direction);
         
-        right.crossVectors(direction, this.camera.up).normalize();
-        up.crossVectors(right, direction).normalize();
+        right.crossVectors(this._direction, this.camera.up).normalize();
+        up.crossVectors(right, this._direction).normalize();
         
-        // /2
-        const panX = -deltaX * this.config.panSensitivity * this.distance / 10;
-        const panY = deltaY * this.config.panSensitivity * this.distance / 10;
+        // Pan distance proportional to current radius
+        const panX = -deltaX * this.config.panSensitivity * this.spherical.radius / 10;
+        const panY = deltaY * this.config.panSensitivity * this.spherical.radius / 10;
         
         this.target.add(right.multiplyScalar(panX));
         this.target.add(up.multiplyScalar(panY));
@@ -132,11 +152,20 @@ export class OrbitCameraController extends CameraController {
     }
 
     private updateCameraPosition(): void {
-        const x = this.target.x + this.distance * Math.sin(this.polarAngle) * Math.sin(this.azimuthAngle);
-        const y = this.target.y + this.distance * Math.cos(this.polarAngle);
-        const z = this.target.z + this.distance * Math.sin(this.polarAngle) * Math.cos(this.azimuthAngle);
+        // Ensure phi is within safe range
+        const minPhi = Math.max(EPSILON, this.config.minPolarAngle);
+        const maxPhi = Math.min(Math.PI - EPSILON, this.config.maxPolarAngle);
+        this.spherical.phi = clamp(this.spherical.phi, minPhi, maxPhi);
         
-        this.camera.position.set(x, y, z);
+        // Clamp radius
+        this.spherical.radius = clamp(
+            this.spherical.radius,
+            this.config.minDistance,
+            this.config.maxDistance
+        );
+        
+        // Update camera position from spherical coordinates
+        this.camera.position.setFromSpherical(this.spherical).add(this.target);
         this.camera.lookAt(this.target);
     }
 
@@ -146,6 +175,16 @@ export class OrbitCameraController extends CameraController {
 
     public setTarget(target: Vector3): void {
         this.target.copy(target);
+        
+        // Recalculate spherical coordinates from new target-camera relationship
+        this._direction.subVectors(this.camera.position, this.target);
+        this.spherical.setFromVector3(this._direction);
+        
+        // Clamp phi to safe range
+        const minPhi = Math.max(EPSILON, this.config.minPolarAngle);
+        const maxPhi = Math.min(Math.PI - EPSILON, this.config.maxPolarAngle);
+        this.spherical.phi = clamp(this.spherical.phi, minPhi, maxPhi);
+        
         this.updateCameraPosition();
     }
 
@@ -154,29 +193,46 @@ export class OrbitCameraController extends CameraController {
     }
 
     public setDistance(distance: number): void {
-        this.distance = Math.max(this.config.minDistance, Math.min(this.config.maxDistance, distance));
-        this.updateCameraPosition();
-    }
-
-    public getDistance(): number {
-        return this.distance;
-    }
-
-    public setAngles(azimuth: number, polar: number): void {
-        this.azimuthAngle = azimuth;
-        this.polarAngle = Math.max(
-            this.config.minPolarAngle,
-            Math.min(this.config.maxPolarAngle, polar)
+        this.spherical.radius = clamp(
+            distance,
+            this.config.minDistance,
+            this.config.maxDistance
         );
         this.updateCameraPosition();
     }
 
+    public getDistance(): number {
+        return this.spherical.radius;
+    }
+
+    public setAngles(azimuth: number, polar: number): void {
+        this.spherical.theta = azimuth;
+        const minPhi = Math.max(EPSILON, this.config.minPolarAngle);
+        const maxPhi = Math.min(Math.PI - EPSILON, this.config.maxPolarAngle);
+        this.spherical.phi = clamp(polar, minPhi, maxPhi);
+        this.updateCameraPosition();
+    }
+
     public getAngles(): { azimuth: number; polar: number } {
-        return { azimuth: this.azimuthAngle, polar: this.polarAngle };
+        return { azimuth: this.spherical.theta, polar: this.spherical.phi };
     }
 
     public updateConfig(newConfig: Partial<OrbitControllerConfig>): void {
         this.config = { ...this.config, ...newConfig };
+        
+        // Ensure current phi is within new bounds
+        const minPhi = Math.max(EPSILON, this.config.minPolarAngle);
+        const maxPhi = Math.min(Math.PI - EPSILON, this.config.maxPolarAngle);
+        this.spherical.phi = clamp(this.spherical.phi, minPhi, maxPhi);
+        
+        // Ensure current radius is within new bounds
+        this.spherical.radius = clamp(
+            this.spherical.radius,
+            this.config.minDistance,
+            this.config.maxDistance
+        );
+        
+        this.updateCameraPosition();
     }
 
     public getConfig(): Required<OrbitControllerConfig> {
@@ -185,9 +241,9 @@ export class OrbitCameraController extends CameraController {
 
     public reset(): void {
         this.target.set(0, 0, 0);
-        this.distance = 10;
-        this.azimuthAngle = 0;
-        this.polarAngle = Math.PI / 2;
+        this.spherical.radius = 10;
+        this.spherical.theta = 0;
+        this.spherical.phi = Math.PI / 2;
         this.updateCameraPosition();
     }
 

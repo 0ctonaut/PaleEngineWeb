@@ -9,13 +9,28 @@ import {
     Raycaster,
     Vector2,
     ArrowHelper,
-    Quaternion
+    Quaternion,
+    Sprite,
+    SpriteMaterial,
+    CanvasTexture
 } from 'three/webgpu';
-import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+export interface AxisColorConfig {
+    /** Axis color (also used for positive sphere and outline) */
+    color: number;
+    /** Negative sphere color (default: color * 0.5) */
+    negativeSphere?: number;
+}
 
 export interface ViewHelperGizmoConfig {
     /** Axis length (default: 1.0) */
     size?: number;
+    /** Color configuration for each axis */
+    axisColors?: {
+        x?: AxisColorConfig;
+        y?: AxisColorConfig;
+        z?: AxisColorConfig;
+    };
 }
 
 export enum ViewDirection {
@@ -27,47 +42,47 @@ export enum ViewDirection {
     NEGATIVE_Z = '-z'
 }
 
+interface LabelInfo {
+    sprite: Sprite;
+    sphere: Mesh;
+    isPositive: boolean;
+    blackTexture?: CanvasTexture;
+    whiteTexture: CanvasTexture;
+}
+
+interface CircleOutlineInfo {
+    outlineSphere: Mesh;
+    targetSphere: Mesh;
+}
+
 export class ViewHelperGizmo {
     private scene!: Scene;
     private camera!: OrthographicCamera;
     private gizmoGroup!: Group;
     private sphereGroup!: Group;
     private spheres: Map<Mesh, ViewDirection> = new Map();
+    private labels: LabelInfo[] = [];
+    private circleOutlines: CircleOutlineInfo[] = [];
     private raycaster: Raycaster;
     private axisLength: number;
-    private labelRenderer!: CSS2DRenderer;
-    private labelContainer!: HTMLElement;
+    private sphereRadius: number = 0.15;
+    private labelOffset: number = 0.05;
+    private axisColors?: ViewHelperGizmoConfig['axisColors'];
+    private hoveredSphere: Mesh | null = null;
     
     constructor(config: ViewHelperGizmoConfig = {}) {
         this.axisLength = config.size || 1.0;
+        this.axisColors = config.axisColors;
         this.raycaster = new Raycaster();
         
         this.scene = new Scene();
         this.createCamera();
-        this.createLabelRenderer();
         this.createGizmo();
     }
     
-    private createLabelRenderer(): void {
-        // Create label container
-        this.labelContainer = document.createElement('div');
-        this.labelContainer.style.position = 'absolute';
-        this.labelContainer.style.width = '128px';
-        this.labelContainer.style.height = '128px';
-        this.labelContainer.style.overflow = 'hidden';
-        this.labelContainer.style.pointerEvents = 'none';
-        this.labelContainer.style.zIndex = '1000';
-        
-        // Create CSS2DRenderer for text labels
-        this.labelRenderer = new CSS2DRenderer({ element: this.labelContainer });
-        this.labelRenderer.setSize(128, 128);
-        
-        // Container will be added to DOM by World class
-    }
-    
     private createCamera(): void {
-        this.camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
-        this.camera.position.set(0, 0, 5);
+        this.camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 120);
+        this.camera.position.set(0, 0, 100);
         this.camera.lookAt(0, 0, 0);
     }
     
@@ -75,70 +90,122 @@ export class ViewHelperGizmo {
         this.gizmoGroup = new Group();
         this.sphereGroup = new Group();
         
-        // Create 3 axis lines with spheres
-        this.createAxis('x', 0xff0000, new Vector3(1, 0, 0)); // Red for X
-        this.createAxis('y', 0x00ff00, new Vector3(0, 1, 0)); // Green for Y
-        this.createAxis('z', 0x0000ff, new Vector3(0, 0, 1)); // Blue for Z
+        const defaultColors = {
+            x: { color: 0xff0000 },
+            y: { color: 0x00ff00 },
+            z: { color: 0x0000ff }
+        };
+        
+        const xColor = this.axisColors?.x ?? defaultColors.x;
+        const yColor = this.axisColors?.y ?? defaultColors.y;
+        const zColor = this.axisColors?.z ?? defaultColors.z;
+        
+        this.createAxis('x', xColor, new Vector3(1, 0, 0));
+        this.createAxis('y', yColor, new Vector3(0, 1, 0));
+        this.createAxis('z', zColor, new Vector3(0, 0, 1));
         
         this.gizmoGroup.add(this.sphereGroup);
         this.scene.add(this.gizmoGroup);
     }
     
-    private createAxis(axisName: string, color: number, direction: Vector3): void {
+    private createAxis(axisName: string, colorConfig: AxisColorConfig, direction: Vector3): void {
         const arrowLength = this.axisLength;
+        const axisColor = colorConfig.color;
+        const positiveSphereColor = axisColor;
+        const negativeSphereColor = colorConfig.negativeSphere ?? (axisColor * 0.8);
+        
         const arrowHelper = new ArrowHelper(
             direction,
             new Vector3(0, 0, 0),
             arrowLength,
-            color,
+            axisColor,
             0.05, // head length
             0.05  // head width
         );
         
         this.gizmoGroup.add(arrowHelper);
         
-        // Create spheres at both ends of the axis
-        const sphereGeometry = new SphereGeometry(0.15, 16, 16);
+        const sphereGeometry = new SphereGeometry(this.sphereRadius, 16, 16);
         
-        // Positive direction sphere (brighter)
-        const positiveSphere = new Mesh(sphereGeometry, new MeshBasicMaterial({ color }));
+        const positiveSphere = new Mesh(sphereGeometry, new MeshBasicMaterial({ 
+            color: positiveSphereColor
+        }));
         positiveSphere.position.copy(direction.clone().multiplyScalar(arrowLength));
-        
-        // Negative direction sphere (darker)
         const negativeSphere = new Mesh(sphereGeometry, new MeshBasicMaterial({ 
-            color: color * 0.8
+            color: negativeSphereColor
         }));
         negativeSphere.position.copy(direction.clone().multiplyScalar(-arrowLength));
+        const scalar = 0.8;
+        negativeSphere.scale.set(scalar, scalar, scalar);
         
-        // Store sphere-to-direction mapping
+        const outlineSphereGeometry = new SphereGeometry(this.sphereRadius, 16, 16);
+        const outlineSphere = new Mesh(outlineSphereGeometry, new MeshBasicMaterial({ 
+            color: axisColor
+        }));
+        outlineSphere.raycast = () => {};
+        
         this.spheres.set(positiveSphere, this.getPositiveDirection(axisName));
         this.spheres.set(negativeSphere, this.getNegativeDirection(axisName));
         
-        // Add text labels
         this.addLabel(positiveSphere, axisName, true);
         this.addLabel(negativeSphere, axisName, false);
         
+        this.circleOutlines.push({ outlineSphere, targetSphere: negativeSphere });
+        
         this.sphereGroup.add(positiveSphere);
         this.sphereGroup.add(negativeSphere);
+        this.scene.add(outlineSphere);
     }
     
     private addLabel(sphere: Mesh, axisName: string, isPositive: boolean): void {
-        // Create simple text label
-        const labelDiv = document.createElement('div');
-        labelDiv.className = 'gizmo-label';
-        labelDiv.textContent = (isPositive ? '+' : '-') + axisName.toUpperCase();
-        labelDiv.style.position = 'absolute';
-        labelDiv.style.color = '#ffffff';
-        labelDiv.style.fontSize = '10px';
-        labelDiv.style.fontWeight = 'bold';
-        labelDiv.style.textAlign = 'center';
-        labelDiv.style.pointerEvents = 'none';
-        labelDiv.style.textShadow = '1px 1px 2px rgba(0,0,0,0.9)';
-        labelDiv.style.fontFamily = 'Arial, sans-serif';
+        const text = (isPositive ? '+' : '-') + axisName.toUpperCase();
         
-        const label = new CSS2DObject(labelDiv);
-        label.position.set(0, 0.0, 0); // Center of sphere
-        sphere.add(label);
+        let blackTexture: CanvasTexture | undefined;
+        
+        if (isPositive) {
+            const blackCanvas = document.createElement('canvas');
+            const blackContext = blackCanvas.getContext('2d')!;
+            blackCanvas.width = 256;
+            blackCanvas.height = 256;
+            blackContext.font = 'bold 150px Consolas';
+            blackContext.fillStyle = '#010101';
+            blackContext.textAlign = 'center';
+            blackContext.textBaseline = 'middle';
+            blackContext.fillText(text, blackCanvas.width / 2, blackCanvas.height / 2);
+            blackTexture = new CanvasTexture(blackCanvas);
+        }
+        
+        const whiteCanvas = document.createElement('canvas');
+        const whiteContext = whiteCanvas.getContext('2d')!;
+        whiteCanvas.width = 256;
+        whiteCanvas.height = 256;
+        whiteContext.font = 'bold 150px Consolas';
+        whiteContext.fillStyle = '#ffffff';
+        whiteContext.textAlign = 'center';
+        whiteContext.textBaseline = 'middle';
+        whiteContext.fillText(text, whiteCanvas.width / 2, whiteCanvas.height / 2);
+        const whiteTexture = new CanvasTexture(whiteCanvas);
+        
+        const material = new SpriteMaterial({
+            map: isPositive ? blackTexture! : whiteTexture,
+            transparent: true,
+            alphaTest: 0.1,
+            opacity: isPositive ? 1 : 0
+        });
+        
+        const sprite = new Sprite(material);
+        sprite.scale.set(0.3, 0.3, 1);
+        sprite.raycast = () => {};
+        
+        this.labels.push({ 
+            sprite, 
+            sphere, 
+            isPositive,
+            blackTexture,
+            whiteTexture
+        });
+        
+        this.scene.add(sprite);
     }
     
     private getPositiveDirection(axis: string): ViewDirection {
@@ -163,40 +230,70 @@ export class ViewHelperGizmo {
         this.gizmoGroup.quaternion.copy(quaternion).invert();
     }
     
-    public setLabelPosition(gizmoX: number, gizmoY: number): void {
-        this.labelContainer.style.top = `${gizmoY}px`;
-        this.labelContainer.style.left = `${gizmoX}px`;
-    }
-    
-    public getLabelContainer(): HTMLElement {
-        return this.labelContainer;
-    }
-    
     public async render(renderer: any): Promise<void> {
-        const autoClear = renderer.autoClear;
-        renderer.autoClear = false;
-        await renderer.render(this.scene, this.camera);
-        renderer.autoClear = autoClear;
+        this.labels.forEach(({ sprite, sphere, isPositive, blackTexture, whiteTexture }) => {
+            const sphereWorldPos = sphere.getWorldPosition(new Vector3());
+            const direction = sphereWorldPos.clone().sub(this.camera.position).normalize();
+            const offset = this.sphereRadius + this.labelOffset;
+            sprite.position.copy(sphereWorldPos).add(direction.multiplyScalar(-offset));
+            sprite.lookAt(this.camera.position);
+            
+            const material = sprite.material as SpriteMaterial;
+            const isHovered = this.hoveredSphere === sphere;
+            
+            if (isPositive) {
+                material.map = isHovered ? whiteTexture : (blackTexture!);
+                material.opacity = 1;
+            } else {
+                material.map = whiteTexture;
+                material.opacity = isHovered ? 1 : 0;
+            }
+        });
         
-        // Render CSS2D labels
-        this.labelRenderer.render(this.scene, this.camera);
+        this.circleOutlines.forEach(({ outlineSphere, targetSphere }) => {
+            const sphereWorldPos = targetSphere.getWorldPosition(new Vector3());
+            const direction = sphereWorldPos.clone().sub(this.camera.position).normalize();
+            const offset = this.sphereRadius * 0.5;
+            outlineSphere.position.copy(sphereWorldPos).add(direction.multiplyScalar(offset));
+        });
+        
+        await renderer.render(this.scene, this.camera);
+    }
+    
+    private getSphereAtPosition(mouseX: number, mouseY: number, viewportSize: number): Mesh | null {
+        this.gizmoGroup.updateMatrixWorld(true);
+        
+        const x = (mouseX / viewportSize) * 2 - 1;
+        const y = -(mouseY / viewportSize) * 2 + 1;
+        
+        this.raycaster.setFromCamera(new Vector2(x, y), this.camera);
+        const intersects = this.raycaster.intersectObjects([this.gizmoGroup], true);
+        
+        if (intersects.length > 0) {
+            for (const intersect of intersects) {
+                const hitObject = intersect.object as Mesh;
+                if (this.spheres.has(hitObject)) {
+                    return hitObject;
+                }
+            }
+        }
+        
+        return null;
+    }
+    
+    public handleHover(mouseX: number, mouseY: number, viewportSize: number): void {
+        if (mouseX < 0 || mouseY < 0) {
+            this.hoveredSphere = null;
+            return;
+        }
+        this.hoveredSphere = this.getSphereAtPosition(mouseX, mouseY, viewportSize);
     }
     
     public handleClick(mouseX: number, mouseY: number, viewportSize: number): ViewDirection | null {
-        // Convert mouse coordinates to Gizmo viewport space (-1 to 1)
-        const x = (mouseX / viewportSize) * 2 - 1;
-        const y = -(mouseY / viewportSize) * 2 + 1; // Invert Y axis
-        
-        this.raycaster.setFromCamera(new Vector2(x, y), this.camera);
-        
-        // Detect all spheres
-        const intersects = this.raycaster.intersectObjects(Array.from(this.spheres.keys()));
-        
-        if (intersects.length > 0) {
-            const hitSphere = intersects[0].object as Mesh;
+        const hitSphere = this.getSphereAtPosition(mouseX, mouseY, viewportSize);
+        if (hitSphere) {
             return this.spheres.get(hitSphere) || null;
         }
-        
         return null;
     }
     
@@ -226,6 +323,28 @@ export class ViewHelperGizmo {
             }
             if (sphere.material) {
                 (sphere.material as MeshBasicMaterial).dispose();
+            }
+        });
+        
+        this.labels.forEach(({ sprite, blackTexture, whiteTexture }) => {
+            if (sprite.material) {
+                const material = sprite.material as SpriteMaterial;
+                material.dispose();
+            }
+            if (blackTexture) {
+                blackTexture.dispose();
+            }
+            if (whiteTexture) {
+                whiteTexture.dispose();
+            }
+        });
+        
+        this.circleOutlines.forEach(({ outlineSphere }) => {
+            if (outlineSphere.geometry) {
+                outlineSphere.geometry.dispose();
+            }
+            if (outlineSphere.material) {
+                (outlineSphere.material as MeshBasicMaterial).dispose();
             }
         });
         

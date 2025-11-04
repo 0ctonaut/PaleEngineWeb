@@ -12,12 +12,11 @@ import { LocalInputManager, InputContext, EventTypes, InputEvent } from './input
 import { 
     OutlineRenderer, 
     OutlineConfig, 
-    ViewHelperGizmo,
     PassManager,
-    MainRenderPass,
-    ViewHelperGizmoPass,
-    GridPass
+    SceneRenderPass,
+    ViewHelperGizmoPass
 } from './rendering';
+import { ViewHelperGizmo } from './rendering/view-helper-gizmo';
 import { OrbitCameraController } from './camera';
 import { ProcessorManager, SelectionProcessor, TransformProcessor, UndoRedoProcessor } from './processors';
 import { CommandManager } from './commands';
@@ -29,20 +28,21 @@ export class World {
     private readonly scene: Scene;
     private readonly meshes: Mesh[] = [];
     private animationId: number | null = null;
+    private isDisposed: boolean = false;
     private inputManager!: LocalInputManager;
     private canvasInputContext!: InputContext;
     private selectedMesh: Mesh | null = null;
-    private outlineRenderer!: OutlineRenderer;
     private resizer!: Resizer;
     private cameraController!: OrbitCameraController;
     private container!: HTMLElement;
     
     // Pass system
     private passManager!: PassManager;
-    private mainRenderPass!: MainRenderPass;
+    private sceneRenderPass!: SceneRenderPass;
     private viewHelperGizmoPass!: ViewHelperGizmoPass;
-    // @ts-expect-error - Reserved for future use
-    private gridPass!: GridPass;
+    
+    // 保留outlineRenderer用于配置（向后兼容）
+    private outlineRenderer!: OutlineRenderer;
     
     // Processor architecture
     private processorManager!: ProcessorManager;
@@ -83,12 +83,20 @@ export class World {
     }
 
     public async animate(): Promise<void> {
-        this.animationId = requestAnimationFrame(() => this.animate());
+        // 检查是否已被 dispose（防止在 dispose 后继续执行）
+        if (this.isDisposed) {
+            return;
+        }
         
         const deltaTime = this.calculateDeltaTime();
         this.performanceMonitor.update();
         this.processorManager.update(deltaTime);    
         await this.render();
+        
+        // 在渲染完成后才调度下一帧（防止在 dispose 过程中继续调度）
+        if (!this.isDisposed) {
+            this.animationId = requestAnimationFrame(() => this.animate());
+        }
     }
 
     private calculateDeltaTime(): number {
@@ -106,6 +114,8 @@ export class World {
     }
     
     public dispose(): void {
+        // 设置标志，防止动画循环继续执行
+        this.isDisposed = true;
         this.stopAnimation();
         
         if (this.inputManager) {
@@ -134,6 +144,18 @@ export class World {
         
         if (this.cameraController) {
             this.cameraController.dispose();
+        }
+        
+        // 清理 renderer 和移除 canvas（防止热更新时残留）
+        if (this.renderer) {
+            const canvas = this.renderer.domElement;
+            if (canvas && canvas.parentNode) {
+                canvas.parentNode.removeChild(canvas);
+            }
+            // WebGPU renderer 可能需要 dispose，检查是否有该方法
+            if (typeof (this.renderer as any).dispose === 'function') {
+                (this.renderer as any).dispose();
+            }
         }
         
         this.scene.clear();
@@ -182,6 +204,9 @@ export class World {
         canvas.style.outline = 'none';
         
         container.append(this.renderer.domElement);
+        
+        // 注意：现在使用3D标签，不再需要DOM容器
+        // 标签作为3D对象直接渲染在场景中，可以通过深度测试实现遮挡
     }
 
     private startAnimation(): void {
@@ -191,6 +216,9 @@ export class World {
     private async render(): Promise<void> {
         const width = this.container.clientWidth;
         const height = this.container.clientHeight;
+        
+        // 更新相机控制器
+        this.cameraController.update();
         
         this.renderer.setViewport(0, 0, width, height);
         await this.passManager.render(this.renderer, this.scene, this.camera);
@@ -262,42 +290,70 @@ export class World {
     private initializePassSystem(): void {
         this.passManager = new PassManager();
         
-        this.mainRenderPass = new MainRenderPass(this.outlineRenderer, this.scene, this.camera);
-        this.passManager.addPass('main', this.mainRenderPass);
+        // 准备outline配置
+        const outlineConfig: OutlineConfig = {
+            color: new Color(0x00ff00),
+            thickness: 5,
+            alpha: 1.0,
+        };
         
-        this.gridPass = new GridPass({
-            cellSize: 50,
-            color: new Color(0x666666),
-            lineWidth: 1.5,
-            opacity: 0.5,
-            showMajorGrid: true,
-            majorGridInterval: 5,
-            majorGridColor: new Color(0x888888),
-            majorGridLineWidth: 2.0
-        });
+        // 注册passes，按执行顺序：
+        // SceneRenderPass - 渲染场景（清除framebuffer）
+        // Grid和Outline作为SceneRenderPass的可选addon，网格mesh直接添加到场景中
+        // 网格会与场景一起渲染，可以参与深度测试，被物体遮挡
+        this.sceneRenderPass = new SceneRenderPass(this.scene, this.camera, true); // must be true to avoid overlap
+        this.sceneRenderPass.enableOutline(outlineConfig);
+        this.passManager.addPass('scene', this.sceneRenderPass);
         
-        this.viewHelperGizmoPass = new ViewHelperGizmoPass(this.camera);
+        // 创建 ViewHelperGizmoPass
+        this.viewHelperGizmoPass = new ViewHelperGizmoPass(
+            this.camera
+        );
+        
+        // TODO: 如果需要与 ViewportGizmo 集成，需要实现相应的接口
+        // 当前 ViewHelperGizmo 是自定义实现，不兼容 three-viewport-gizmo 的 attachControls API
+        
         this.passManager.addPass('gizmo', this.viewHelperGizmoPass);
         
         const width = this.container.clientWidth;
         const height = this.container.clientHeight;
         this.passManager.setSize(width, height);
-        
-        const labelContainer = this.viewHelperGizmoPass.getLabelContainer();
-        this.container.appendChild(labelContainer);
     }
     
     private setupInputHandlers(): void {
-        // Gizmo click handling - use MOUSE_UP to execute before SelectionProcessor
-        // World handlers are registered first, so they execute before processor handlers
-        this.inputManager.on(EventTypes.MOUSE_UP, (event: InputEvent) => {
-            const direction = this.viewHelperGizmoPass.handleClick(event.position.x, event.position.y);
-            
-            if (direction !== null) {
-                event.stopPropagation();
+        // Handle view helper gizmo hover
+        this.inputManager.on(EventTypes.MOUSE_MOVE, (event: InputEvent) => {
+            if (this.viewHelperGizmoPass) {
+                // Get mouse position relative to canvas
+                const canvas = this.renderer.domElement;
+                const rect = canvas.getBoundingClientRect();
+                const clientX = event.globalPosition.x - rect.left;
+                const clientY = event.globalPosition.y - rect.top;
                 
-                const params = ViewHelperGizmo.getViewParameters(direction, this.cameraController.getDistance());
-                this.cameraController.setAngles(params.azimuth, params.polar);
+                // Update hover state
+                this.viewHelperGizmoPass.handleHover(clientX, clientY);
+            }
+        });
+        
+        // Handle view helper gizmo clicks
+        this.inputManager.on(EventTypes.CLICK, (event: InputEvent) => {
+            if (this.viewHelperGizmoPass) {
+                // Get click position relative to canvas
+                const canvas = this.renderer.domElement;
+                const rect = canvas.getBoundingClientRect();
+                const clientX = event.globalPosition.x - rect.left;
+                const clientY = event.globalPosition.y - rect.top;
+                
+                // Check if click hits gizmo and handle view change
+                const direction = this.viewHelperGizmoPass.handleClick(clientX, clientY);
+                if (direction) {
+                    // Get view parameters from direction
+                    const { azimuth, polar } = ViewHelperGizmo.getViewParameters(direction, this.cameraController.getDistance());
+                    // Update camera angles
+                    this.cameraController.setAngles(azimuth, polar);
+                    // Stop event propagation to prevent other handlers from processing
+                    event.stopPropagation();
+                }
             }
         });
         
@@ -322,6 +378,10 @@ export class World {
     }
     
     public updateOutlineConfig(config: Partial<OutlineConfig>): void {
+        if (this.sceneRenderPass && this.sceneRenderPass.isOutlineEnabled()) {
+            this.sceneRenderPass.updateOutlineConfig(config);
+        }
+        // 保留outlineRenderer的更新以保持向后兼容（如果还在使用）
         if (this.outlineRenderer) {
             this.outlineRenderer.updateConfig(config);
         }
@@ -345,8 +405,8 @@ export class World {
 
     public setSelectedMesh(mesh: Mesh | null): void {
         this.selectedMesh = mesh;
-        if (this.mainRenderPass) {
-            this.mainRenderPass.setSelectedMesh(mesh);
+        if (this.sceneRenderPass && this.sceneRenderPass.isOutlineEnabled()) {
+            this.sceneRenderPass.setSelectedObjects(mesh ? [mesh] : []);
         }
     }
 

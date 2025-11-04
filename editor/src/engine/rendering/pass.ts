@@ -8,5 +8,11 @@ export interface RenderPass {
     enable(): void;
     disable(): void;
     isEnabled(): boolean;
+    
+    /**
+     * Returns whether this pass should clear the framebuffer
+     * @returns true to clear framebuffer, false to composite onto existing content
+     */
+    shouldClear(): boolean;
 }
 

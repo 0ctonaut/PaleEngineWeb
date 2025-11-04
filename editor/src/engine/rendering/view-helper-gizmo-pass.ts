@@ -1,5 +1,5 @@
 import { WebGPURenderer, Scene, Camera, PerspectiveCamera } from 'three/webgpu';
-import { ViewHelperGizmo } from './view-helper-gizmo';
+import { ViewHelperGizmo, ViewDirection } from './view-helper-gizmo';
 import { RenderPass } from './pass';
 
 export interface ViewHelperGizmoPassConfig {
@@ -25,7 +25,12 @@ export class ViewHelperGizmoPass implements RenderPass {
         };
         
         this.gizmo = new ViewHelperGizmo({
-            size: 0.5
+            size: 0.5,
+            axisColors: {
+                x: { color: 0xf90000, negativeSphere: 0x7f0000 },
+                y: { color: 0x00f900, negativeSphere: 0x007f00 },
+                z: { color: 0x0000f9, negativeSphere: 0x00007f }
+            }
         });
     }
 
@@ -36,13 +41,8 @@ export class ViewHelperGizmoPass implements RenderPass {
 
         this.gizmo.syncWithCamera(this.camera.quaternion);
 
-        // 计算Gizmo位置
         const { x, y } = this.calculatePosition();
 
-        // 同步标签位置
-        this.gizmo.setLabelPosition(x, y);
-
-        // 启用scissor测试，限制渲染区域
         renderer.setScissorTest(true);
         renderer.setScissor(x, y, this.config.size, this.config.size);
         renderer.setViewport(x, y, this.config.size, this.config.size);
@@ -50,7 +50,6 @@ export class ViewHelperGizmoPass implements RenderPass {
         
         await this.gizmo.render(renderer);
 
-        // 恢复状态 - 恢复全屏viewport和scissor设置
         renderer.setScissorTest(false);
         renderer.setViewport(0, 0, this.width, this.height);
         renderer.setScissor(0, 0, this.width, this.height);
@@ -77,9 +76,10 @@ export class ViewHelperGizmoPass implements RenderPass {
         return this.enabled;
     }
 
-    /**
-     * 计算Gizmo的位置
-     */
+    public shouldClear(): boolean {
+        return true;
+    }
+
     private calculatePosition(): { x: number; y: number } {
         const { size, padding, alignment } = this.config;
 
@@ -112,42 +112,36 @@ export class ViewHelperGizmoPass implements RenderPass {
         }
     }
 
-    /**
-     * 处理点击事件，检查是否点击在Gizmo区域内
-     * @param clientX 鼠标X坐标（相对于canvas）
-     * @param clientY 鼠标Y坐标（相对于canvas）
-     * @returns 点击的方向，如果没有点击在Gizmo上则返回null
-     */
-    public handleClick(clientX: number, clientY: number): import('./view-helper-gizmo').ViewDirection | null {
+    public handleClick(clientX: number, clientY: number): ViewDirection | null {
         const { x, y } = this.calculatePosition();
         const { size } = this.config;
 
-        // 检查点击是否在Gizmo区域内
         if (clientX >= x && clientX <= x + size &&
             clientY >= y && clientY <= y + size) {
             
-            // 转换为Gizmo本地坐标
             const localX = clientX - x;
             const localY = clientY - y;
             
             return this.gizmo.handleClick(localX, localY, size);
         }
-
         return null;
     }
 
-    /**
-     * 获取Gizmo实例（用于获取标签容器等）
-     */
-    public getGizmo(): ViewHelperGizmo {
-        return this.gizmo;
-    }
+    public handleHover(clientX: number, clientY: number): void {
+        const { x, y } = this.calculatePosition();
+        const { size } = this.config;
 
-    /**
-     * 获取标签容器（用于添加到DOM）
-     */
-    public getLabelContainer(): HTMLElement {
-        return this.gizmo.getLabelContainer();
+        if (clientX >= x && clientX <= x + size &&
+            clientY >= y && clientY <= y + size) {
+            
+            const localX = clientX - x;
+            const localY = clientY - y;
+            
+            this.gizmo.handleHover(localX, localY, size);
+        } else {
+            // Mouse is outside gizmo area, clear hover state
+            this.gizmo.handleHover(-1, -1, size);
+        }
     }
 }
 

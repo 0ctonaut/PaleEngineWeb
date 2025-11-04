@@ -48,11 +48,15 @@ export class PassManager {
     }
 
     public async render(renderer: WebGPURenderer, scene?: Scene, camera?: Camera): Promise<void> {
+        const originalAutoClearColor = renderer.autoClearColor;
+        
         for (const { pass } of this.passes) {
             if (pass.isEnabled()) {
+                renderer.autoClearColor = pass.shouldClear();
                 await pass.render(renderer, scene, camera);
             }
         }
+        renderer.autoClearColor = originalAutoClearColor;
     }
 
     public setSize(width: number, height: number): void {
