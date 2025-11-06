@@ -12,20 +12,17 @@ import {
     Quaternion,
     Sprite,
     SpriteMaterial,
-    CanvasTexture
+    CanvasTexture,
+    Color
 } from 'three/webgpu';
 
 export interface AxisColorConfig {
-    /** Axis color (also used for positive sphere and outline) */
     color: number;
-    /** Negative sphere color (default: color * 0.5) */
     negativeSphere?: number;
 }
 
 export interface ViewHelperGizmoConfig {
-    /** Axis length (default: 1.0) */
     size?: number;
-    /** Color configuration for each axis */
     axisColors?: {
         x?: AxisColorConfig;
         y?: AxisColorConfig;
@@ -53,6 +50,7 @@ interface LabelInfo {
 interface CircleOutlineInfo {
     outlineSphere: Mesh;
     targetSphere: Mesh;
+    axisColor: number;
 }
 
 export class ViewHelperGizmo {
@@ -74,8 +72,11 @@ export class ViewHelperGizmo {
         this.axisLength = config.size || 1.0;
         this.axisColors = config.axisColors;
         this.raycaster = new Raycaster();
-        
         this.scene = new Scene();
+        const backgroundColor = 'dimgray';
+        this.scene.background = new Color(backgroundColor);
+        // temp
+        this.scene.background = null;
         this.createCamera();
         this.createGizmo();
     }
@@ -126,23 +127,31 @@ export class ViewHelperGizmo {
         this.gizmoGroup.add(arrowHelper);
         
         const sphereGeometry = new SphereGeometry(this.sphereRadius, 16, 16);
+        const scalar = 0.8;
         
         const positiveSphere = new Mesh(sphereGeometry, new MeshBasicMaterial({ 
             color: positiveSphereColor
         }));
         positiveSphere.position.copy(direction.clone().multiplyScalar(arrowLength));
+        positiveSphere.scale.set(scalar, scalar, scalar);
+
         const negativeSphere = new Mesh(sphereGeometry, new MeshBasicMaterial({ 
             color: negativeSphereColor
         }));
         negativeSphere.position.copy(direction.clone().multiplyScalar(-arrowLength));
-        const scalar = 0.8;
         negativeSphere.scale.set(scalar, scalar, scalar);
         
         const outlineSphereGeometry = new SphereGeometry(this.sphereRadius, 16, 16);
-        const outlineSphere = new Mesh(outlineSphereGeometry, new MeshBasicMaterial({ 
+        
+        const positiveOutlineSphere = new Mesh(outlineSphereGeometry, new MeshBasicMaterial({ 
             color: axisColor
         }));
-        outlineSphere.raycast = () => {};
+        positiveOutlineSphere.raycast = () => {};
+        
+        const negativeOutlineSphere = new Mesh(outlineSphereGeometry, new MeshBasicMaterial({ 
+            color: axisColor
+        }));
+        negativeOutlineSphere.raycast = () => {};
         
         this.spheres.set(positiveSphere, this.getPositiveDirection(axisName));
         this.spheres.set(negativeSphere, this.getNegativeDirection(axisName));
@@ -150,11 +159,13 @@ export class ViewHelperGizmo {
         this.addLabel(positiveSphere, axisName, true);
         this.addLabel(negativeSphere, axisName, false);
         
-        this.circleOutlines.push({ outlineSphere, targetSphere: negativeSphere });
+        this.circleOutlines.push({ outlineSphere: positiveOutlineSphere, targetSphere: positiveSphere, axisColor });
+        this.circleOutlines.push({ outlineSphere: negativeOutlineSphere, targetSphere: negativeSphere, axisColor });
         
         this.sphereGroup.add(positiveSphere);
         this.sphereGroup.add(negativeSphere);
-        this.scene.add(outlineSphere);
+        this.scene.add(positiveOutlineSphere);
+        this.scene.add(negativeOutlineSphere);
     }
     
     private addLabel(sphere: Mesh, axisName: string, isPositive: boolean): void {
@@ -250,11 +261,15 @@ export class ViewHelperGizmo {
             }
         });
         
-        this.circleOutlines.forEach(({ outlineSphere, targetSphere }) => {
+        this.circleOutlines.forEach(({ outlineSphere, targetSphere, axisColor }) => {
             const sphereWorldPos = targetSphere.getWorldPosition(new Vector3());
             const direction = sphereWorldPos.clone().sub(this.camera.position).normalize();
             const offset = this.sphereRadius * 0.5;
             outlineSphere.position.copy(sphereWorldPos).add(direction.multiplyScalar(offset));
+            
+            const material = outlineSphere.material as MeshBasicMaterial;
+            const isHovered = this.hoveredSphere === targetSphere;
+            material.color.setHex(isHovered ? 0xf7f7f7 : axisColor);
         });
         
         await renderer.render(this.scene, this.camera);

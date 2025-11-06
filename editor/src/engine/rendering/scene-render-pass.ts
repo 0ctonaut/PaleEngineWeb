@@ -95,6 +95,25 @@ export class SceneRenderPass implements RenderPass {
         if (scene) this.scene = scene;
         if (camera) this.camera = camera;
 
+        // 如果没有启用 outline，直接使用 renderer.render() 而不是 PostProcessing
+        // 这样可以确保 framebuffer 被正确清除，避免颜色残留问题
+        if (!this.outlineEnabled) {
+            // 清理 PostProcessing（如果存在）
+            if (this.postProcessing) {
+                this.postProcessing.dispose();
+                this.postProcessing = null as any;
+            }
+            if (this.outlinePass) {
+                this.outlinePass.dispose();
+                this.outlinePass = null;
+            }
+            
+            // 直接渲染场景
+            await renderer.render(this.scene, this.camera);
+            return;
+        }
+
+        // 启用 outline 时使用 PostProcessing
         const sceneChanged = scene !== undefined && scene !== this.scene;
         const cameraChanged = camera !== undefined && camera !== this.camera;
         
@@ -110,7 +129,7 @@ export class SceneRenderPass implements RenderPass {
         
         this.initializePostProcessing(renderer);
         
-        if (this.outlineEnabled && this.outlinePass) {
+        if (this.outlinePass) {
             this.outlinePass.selectedObjects = this.selectedObjects;
         }
         
@@ -118,7 +137,8 @@ export class SceneRenderPass implements RenderPass {
     }
 
     public setSize(_width: number, _height: number): void {
-        // PostProcessing handles size updates automatically
+        // PostProcessing handles size updates automatically when enabled
+        // When outline is disabled, renderer handles size updates automatically
     }
 
     public dispose(): void {

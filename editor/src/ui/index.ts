@@ -11,3 +11,8 @@ export { ParameterControl } from './components/parameter-control';
 export { LineChart } from './components/chart';
 export type { ParameterConfig } from './components/parameter-control';
 export type { LineChartData, LineChartOptions } from './components/chart';
+
+// Window system
+export { Window, WindowManager, Panel, Viewport } from './components/window';
+export type { WindowContentType, SplitDirection, WindowContent, SplitContent, TabContent } from './components/window';
+export { WindowDragHandler, WindowResizeHandler, WindowContextMenu } from './components/interaction';

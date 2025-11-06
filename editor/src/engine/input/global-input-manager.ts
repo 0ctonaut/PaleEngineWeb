@@ -13,6 +13,9 @@ export class GlobalInputManager {
   
   private contextStack: any[] = [];
   
+  // Global event subscribers (for components that need global events regardless of element)
+  private globalSubscribers: Map<string, Set<(event: MouseEvent | KeyboardEvent | WheelEvent) => void>> = new Map();
+  
   // Event listeners
   private boundKeyDownHandler: (e: KeyboardEvent) => void;
   private boundKeyUpHandler: (e: KeyboardEvent) => void;
@@ -84,21 +87,36 @@ export class GlobalInputManager {
   private handleMouseMove(e: MouseEvent): void {
     this.lastMousePosition = { ...this.mousePosition };
     this.mousePosition = { x: e.clientX, y: e.clientY };
+    this.notifyGlobalSubscribers('mousemove', e);
     this.distributeEvent(e);
   }
   
   private handleMouseDown(e: MouseEvent): void {
     this.mouseButtons.set(e.button, true);
+    this.notifyGlobalSubscribers('mousedown', e);
     this.distributeEvent(e);
   }
   
   private handleMouseUp(e: MouseEvent): void {
     this.mouseButtons.set(e.button, false);
+    this.notifyGlobalSubscribers('mouseup', e);
     this.distributeEvent(e);
   }
   
   private handleWheel(e: WheelEvent): void {
     this.distributeEvent(e);
+  }
+  
+  /**
+   * Notify global subscribers
+   */
+  private notifyGlobalSubscribers(eventType: string, event: MouseEvent | KeyboardEvent | WheelEvent): void {
+    const subscribers = this.globalSubscribers.get(eventType);
+    if (subscribers) {
+      for (const handler of subscribers) {
+        handler(event);
+      }
+    }
   }
   
   /**
@@ -221,6 +239,55 @@ export class GlobalInputManager {
     };
   }
   
+  // ========== Global Event Subscription ==========
+  
+  /**
+   * Subscribe to global mouse move events
+   * Returns an unsubscribe function
+   */
+  public onGlobalMouseMove(handler: (e: MouseEvent) => void): () => void {
+    return this.subscribeGlobalEvent('mousemove', handler as (event: MouseEvent | KeyboardEvent | WheelEvent) => void);
+  }
+  
+  /**
+   * Subscribe to global mouse up events
+   * Returns an unsubscribe function
+   */
+  public onGlobalMouseUp(handler: (e: MouseEvent) => void): () => void {
+    return this.subscribeGlobalEvent('mouseup', handler as (event: MouseEvent | KeyboardEvent | WheelEvent) => void);
+  }
+  
+  /**
+   * Subscribe to global mouse down events
+   * Returns an unsubscribe function
+   */
+  public onGlobalMouseDown(handler: (e: MouseEvent) => void): () => void {
+    return this.subscribeGlobalEvent('mousedown', handler as (event: MouseEvent | KeyboardEvent | WheelEvent) => void);
+  }
+  
+  /**
+   * Generic global event subscription method
+   */
+  private subscribeGlobalEvent(
+    eventType: string,
+    handler: (event: MouseEvent | KeyboardEvent | WheelEvent) => void
+  ): () => void {
+    if (!this.globalSubscribers.has(eventType)) {
+      this.globalSubscribers.set(eventType, new Set());
+    }
+    
+    const subscribers = this.globalSubscribers.get(eventType)!;
+    subscribers.add(handler);
+    
+    // Return unsubscribe function
+    return () => {
+      subscribers.delete(handler);
+      if (subscribers.size === 0) {
+        this.globalSubscribers.delete(eventType);
+      }
+    };
+  }
+  
   // ========== LocalManager Registration ==========
   
   /**
@@ -303,6 +370,7 @@ export class GlobalInputManager {
    */
   public dispose(): void {
     this.removeGlobalListeners();
+    this.globalSubscribers.clear();
     this.localManagers.clear();
     this.contextStack.length = 0;
     this.reset();

@@ -1,52 +1,27 @@
-import { BottomDrawer } from './bottom-drawer';
+import { Panel } from './window/panel';
 import { LineChart, LineChartData } from './chart';
 import { PerformanceMonitor } from '../../engine/profiler';
 
-export class ProfilerPanel extends BottomDrawer {
+export class ProfilerPanel extends Panel {
     private performanceMonitor: PerformanceMonitor;
     private fpsChart!: LineChart;
     private memoryChart!: LineChart;
     private statsContainer!: HTMLElement;
-    private labelText!: HTMLElement;
     private isUpdating: boolean = false;
     private updateId: number | null = null;
-    private isLabelOnly: boolean = false;
     
     constructor(performanceMonitor: PerformanceMonitor) {
         super();
         this.performanceMonitor = performanceMonitor;
-        this.renderLabel();
         this.renderContent();
-        
-        this.isLabelOnly = true;
         this.isUpdating = true;
         this.startUpdate();
     }
     
-    protected renderLabel(): void {
-        const stats = this.performanceMonitor.getStatistics();
-        const currentFps = stats.current ? stats.current.fps : 0;
-        const currentMemory = stats.current ? stats.current.memory : 0;
-        
-        if (!this.labelText) {
-            this.labelText = document.createElement('span');
-            this.labelText.className = 'drawer-label-text';
-            this.getHeader().appendChild(this.labelText);
-        }
-        
-        let text = `Profiler [FPS: ${currentFps.toFixed(0)}]`;
-        
-        if (this.performanceMonitor.isMemoryMonitoringAvailable() && currentMemory > 0) {
-            const memMB = (currentMemory / 1024 / 1024).toFixed(0);
-            text += ` [MEM: ${memMB}MB]`;
-        }
-        
-        this.labelText.textContent = text;
-    }
-    
-    protected renderContent(): void {
-        this.content.innerHTML = '';
-        this.content.className = 'profiler-panel-content';
+    private renderContent(): void {
+        const content = this.getElement();
+        content.className = 'profiler-panel-content';
+        content.innerHTML = '';
         
         const fpsContainer = this.createChartContainer('FPS');
         const fpsCanvasContainer = document.createElement('div');
@@ -59,7 +34,7 @@ export class ProfilerPanel extends BottomDrawer {
             lineColor: '#4CAF50',
             label: 'FPS'
         });
-        this.content.appendChild(fpsContainer);
+        content.appendChild(fpsContainer);
         
         const memoryContainer = this.createChartContainer('MEM Usage');
         const memoryCanvasContainer = document.createElement('div');
@@ -72,11 +47,11 @@ export class ProfilerPanel extends BottomDrawer {
             lineColor: '#2196F3',
             label: 'Memory'
         });
-        this.content.appendChild(memoryContainer);
+        content.appendChild(memoryContainer);
         
         this.statsContainer = document.createElement('div');
         this.statsContainer.className = 'profiler-stats';
-        this.content.appendChild(this.statsContainer);
+        content.appendChild(this.statsContainer);
         
         const controls = document.createElement('div');
         controls.className = 'profiler-controls';
@@ -99,7 +74,9 @@ export class ProfilerPanel extends BottomDrawer {
         
         controls.appendChild(clearButton);
         controls.appendChild(pauseButton);
-        this.content.appendChild(controls);
+        content.appendChild(controls);
+        
+        this.updateCharts();
     }
     
     private createChartContainer(title: string): HTMLElement {
@@ -114,33 +91,9 @@ export class ProfilerPanel extends BottomDrawer {
         return container;
     }
     
-    private updateLabel(): void {
-        const stats = this.performanceMonitor.getStatistics();
-        const currentFps = stats.current ? stats.current.fps : 0;
-        const currentMemory = stats.current ? stats.current.memory : 0;
-        
-        if (!this.labelText) {
-            return;
-        }
-        
-        let text = `Profiler [FPS: ${currentFps.toFixed(0)}]`;
-        
-        if (this.performanceMonitor.isMemoryMonitoringAvailable() && currentMemory > 0) {
-            const memMB = (currentMemory / 1024 / 1024).toFixed(0);
-            text += ` [MEM: ${memMB}MB]`;
-        }
-        
-        this.labelText.textContent = text;
-    }
-    
     private updateCharts(): void {
         const data = this.performanceMonitor.getData();
         const stats = this.performanceMonitor.getStatistics();
-        
-        this.renderLabel();
-        if (this.isLabelOnly) {
-            return;
-        }
         
         const fpsData: LineChartData[] = data.map(d => ({
             timestamp: d.timestamp,
@@ -223,11 +176,7 @@ export class ProfilerPanel extends BottomDrawer {
         if (!this.isUpdating || this.updateId !== null) return;
         
         const update = () => {
-            if (this.isLabelOnly) {
-                this.updateLabel();
-            } else {
-                this.updateCharts();
-            }
+            this.updateCharts();
             
             if (this.isUpdating) {
                 this.updateId = requestAnimationFrame(update);
@@ -242,20 +191,6 @@ export class ProfilerPanel extends BottomDrawer {
             cancelAnimationFrame(this.updateId);
             this.updateId = null;
         }
-    }
-    
-    protected onExpand(): void {
-        this.isLabelOnly = false;
-        this.updateCharts();
-        
-        this.isUpdating = true;
-        this.startUpdate();
-    }
-    
-    protected onCollapse(): void {
-        this.isLabelOnly = true;
-        this.isUpdating = true;
-        this.startUpdate();
     }
     
     public dispose(): void {

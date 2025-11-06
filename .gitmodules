@@ -1,0 +1,3 @@
+[submodule "editor/src/ui/styles/macos"]
+	path = editor/src/ui/styles/macos
+	url = git@github.com:RedEdge967/MacOS-CSS.git

@@ -36,12 +36,17 @@ export class World {
     private cameraController!: OrbitCameraController;
     private container!: HTMLElement;
     
+    public setContainer(container: HTMLElement): void {
+        this.container = container;
+        if (this.resizer) {
+            this.resizer.updateSize();
+        }
+    }
+    
     // Pass system
     private passManager!: PassManager;
     private sceneRenderPass!: SceneRenderPass;
     private viewHelperGizmoPass!: ViewHelperGizmoPass;
-    
-    // 保留outlineRenderer用于配置（向后兼容）
     private outlineRenderer!: OutlineRenderer;
     
     // Processor architecture
@@ -79,11 +84,9 @@ export class World {
         
         this.initializeScene();
         this.setupRenderer(container);
-        this.startAnimation();
     }
 
     public async animate(): Promise<void> {
-        // 检查是否已被 dispose（防止在 dispose 后继续执行）
         if (this.isDisposed) {
             return;
         }
@@ -91,9 +94,8 @@ export class World {
         const deltaTime = this.calculateDeltaTime();
         this.performanceMonitor.update();
         this.processorManager.update(deltaTime);    
-        await this.render();
+        await this.renderInternal();
         
-        // 在渲染完成后才调度下一帧（防止在 dispose 过程中继续调度）
         if (!this.isDisposed) {
             this.animationId = requestAnimationFrame(() => this.animate());
         }
@@ -114,7 +116,6 @@ export class World {
     }
     
     public dispose(): void {
-        // 设置标志，防止动画循环继续执行
         this.isDisposed = true;
         this.stopAnimation();
         
@@ -146,13 +147,11 @@ export class World {
             this.cameraController.dispose();
         }
         
-        // 清理 renderer 和移除 canvas（防止热更新时残留）
         if (this.renderer) {
             const canvas = this.renderer.domElement;
             if (canvas && canvas.parentNode) {
                 canvas.parentNode.removeChild(canvas);
             }
-            // WebGPU renderer 可能需要 dispose，检查是否有该方法
             if (typeof (this.renderer as any).dispose === 'function') {
                 (this.renderer as any).dispose();
             }
@@ -204,24 +203,31 @@ export class World {
         canvas.style.outline = 'none';
         
         container.append(this.renderer.domElement);
-        
-        // 注意：现在使用3D标签，不再需要DOM容器
-        // 标签作为3D对象直接渲染在场景中，可以通过深度测试实现遮挡
     }
 
-    private startAnimation(): void {
-        this.animate();
+    /**
+     * 更新逻辑（需要在渲染前调用）
+     */
+    public update(deltaTime: number): void {
+        this.performanceMonitor.update();
+        this.processorManager.update(deltaTime);
     }
-
-    private async render(): Promise<void> {
-        const width = this.container.clientWidth;
-        const height = this.container.clientHeight;
-        
-        // 更新相机控制器
+    
+    public async render(width: number, height: number, gizmoSize?: number): Promise<void> {
         this.cameraController.update();
+        
+        if (gizmoSize !== undefined && this.viewHelperGizmoPass) {
+            this.viewHelperGizmoPass.setGizmoSize(gizmoSize);
+        }
         
         this.renderer.setViewport(0, 0, width, height);
         await this.passManager.render(this.renderer, this.scene, this.camera);
+    }
+    
+    private async renderInternal(): Promise<void> {
+        const width = this.container.clientWidth;
+        const height = this.container.clientHeight;
+        await this.render(width, height);
     }
     
     private initializeInputSystem(container: HTMLElement): void {
@@ -289,30 +295,18 @@ export class World {
     
     private initializePassSystem(): void {
         this.passManager = new PassManager();
-        
-        // 准备outline配置
-        const outlineConfig: OutlineConfig = {
-            color: new Color(0x00ff00),
-            thickness: 5,
-            alpha: 1.0,
-        };
-        
-        // 注册passes，按执行顺序：
-        // SceneRenderPass - 渲染场景（清除framebuffer）
-        // Grid和Outline作为SceneRenderPass的可选addon，网格mesh直接添加到场景中
-        // 网格会与场景一起渲染，可以参与深度测试，被物体遮挡
-        this.sceneRenderPass = new SceneRenderPass(this.scene, this.camera, true); // must be true to avoid overlap
-        this.sceneRenderPass.enableOutline(outlineConfig);
+
+        this.sceneRenderPass = new SceneRenderPass(this.scene, this.camera, true);
+        // outline remain bugs
+        // const outlineConfig: OutlineConfig = {
+        //     color: new Color(0x00ff00),
+        //     thickness: 5,
+        //     alpha: 1.0,
+        // };
+        // this.sceneRenderPass.enableOutline(outlineConfig);
         this.passManager.addPass('scene', this.sceneRenderPass);
         
-        // 创建 ViewHelperGizmoPass
-        this.viewHelperGizmoPass = new ViewHelperGizmoPass(
-            this.camera
-        );
-        
-        // TODO: 如果需要与 ViewportGizmo 集成，需要实现相应的接口
-        // 当前 ViewHelperGizmo 是自定义实现，不兼容 three-viewport-gizmo 的 attachControls API
-        
+        this.viewHelperGizmoPass = new ViewHelperGizmoPass(this.camera);
         this.passManager.addPass('gizmo', this.viewHelperGizmoPass);
         
         const width = this.container.clientWidth;
@@ -381,7 +375,7 @@ export class World {
         if (this.sceneRenderPass && this.sceneRenderPass.isOutlineEnabled()) {
             this.sceneRenderPass.updateOutlineConfig(config);
         }
-        // 保留outlineRenderer的更新以保持向后兼容（如果还在使用）
+
         if (this.outlineRenderer) {
             this.outlineRenderer.updateConfig(config);
         }

@@ -1,10 +1,12 @@
 import { World } from './engine/world';
-import { Toolbar, BottomBar } from './ui';
-import { ProfilerPanel } from './ui/components/profiler-panel';
+import { Toolbar, WindowManager, Viewport, WindowDragHandler, WindowResizeHandler, WindowContextMenu, ProfilerPanel } from './ui';
 
 let world: World | null = null;
 let toolbar: Toolbar | null = null;
-let bottomBar: BottomBar | null = null;
+let windowManager: WindowManager | null = null;
+let dragHandler: WindowDragHandler | null = null;
+let resizeHandler: WindowResizeHandler | null = null;
+let contextMenu: WindowContextMenu | null = null;
 
 function cleanup(): void {
     // 清理旧的World实例（用于热更新）
@@ -13,16 +15,24 @@ function cleanup(): void {
         world = null;
     }
     
-    // 清理 container 中的所有 canvas 元素（防止热更新时残留）
-    const container = document.querySelector('#scene-container') as HTMLElement;
-    if (container) {
-        // 移除所有 canvas 元素
-        const canvases = container.querySelectorAll('canvas');
-        canvases.forEach(canvas => {
-            if (canvas.parentNode) {
-                canvas.parentNode.removeChild(canvas);
-            }
-        });
+    // 清理窗口管理器
+    if (windowManager) {
+        windowManager.dispose();
+        windowManager = null;
+    }
+    
+    if (dragHandler) {
+        dragHandler.dispose();
+        dragHandler = null;
+    }
+    
+    if (resizeHandler) {
+        resizeHandler = null;
+    }
+    
+    if (contextMenu) {
+        contextMenu.dispose();
+        contextMenu = null;
     }
     
     // 清理UI组件
@@ -35,14 +45,6 @@ function cleanup(): void {
             }
         }
         toolbar = null;
-    }
-    
-    if (bottomBar) {
-        const bottomBarElement = bottomBar.getElement();
-        if (bottomBarElement && bottomBarElement.parentNode) {
-            bottomBarElement.parentNode.removeChild(bottomBarElement);
-        }
-        bottomBar = null;
     }
 }
 
@@ -66,19 +68,119 @@ function main(): void {
             console.warn('Container has zero dimensions. Scene may not render correctly.');
         }
         
-        // 创建新的 World 实例并赋值给全局变量（重要：用于热更新清理）
-        world = new World(container);
+        // 创建窗口管理器
+        windowManager = new WindowManager(container);
+        
+        // 先创建空的 Viewport（不包含 canvas）
+        const viewport = new Viewport();
+        const viewportWindow = windowManager.createWindow('Viewport', viewport);
+        viewportWindow.setPosition(100, 100);
+        viewportWindow.setSize(800, 600);
+        
+        // 获取 Viewport 元素并设置初始尺寸
+        const viewportElement = viewport.getElement();
+        viewportElement.style.width = '800px';
+        viewportElement.style.height = '600px';
+        
+        // 使用 Viewport 元素初始化 World
+        world = new World(viewportElement);
         (window as any).world = world;
+        
+        // 获取 canvas 并添加到 Viewport
+        const canvas = world.getRenderer().domElement;
+        viewport.setCanvas(canvas);
+        
+        // 监听 Viewport 窗口大小变化，更新 renderer
+        const updateViewportSize = () => {
+            const bounds = viewportWindow.getBounds();
+            // 确保 Viewport 元素有正确的尺寸，这样 container.clientWidth/Height 才能正确获取
+            viewportElement.style.width = `${bounds.width}px`;
+            viewportElement.style.height = `${bounds.height}px`;
+            
+            // 更新 renderer 尺寸
+            world!.getRenderer().setSize(bounds.width, bounds.height);
+            world!.getRenderer().setPixelRatio(window.devicePixelRatio);
+            
+            // 更新相机和 pass manager
+            const camera = world!.getCamera();
+            const aspect = bounds.width / bounds.height;
+            camera.aspect = aspect;
+            camera.updateProjectionMatrix();
+            
+            // 更新 pass manager 尺寸
+            const passManager = (world as any).passManager;
+            if (passManager) {
+                passManager.setSize(bounds.width, bounds.height);
+            }
+        };
+        updateViewportSize();
+        
+        // 创建 Profiler 窗口
+        const profilerPanel = new ProfilerPanel(world.getPerformanceMonitor());
+        const profilerWindow = windowManager.createWindow('Profiler', profilerPanel);
+        profilerWindow.setPosition(920, 100);
+        profilerWindow.setSize(400, 400);
         
         // Initialize UI
         toolbar = new Toolbar(world.getCameraController());
         toolbarContainer.appendChild(toolbar.getElement());
         
-        // Initialize Bottom Bar with tabs (使用 fixed 模式，标题固定在 bar 上)
-        bottomBar = new BottomBar('fixed');
-        const profilerPanel = new ProfilerPanel(world.getPerformanceMonitor());
-        bottomBar.addTab(profilerPanel);
-        document.body.appendChild(bottomBar.getElement());
+        // 初始化交互处理器
+        dragHandler = new WindowDragHandler(windowManager);
+        resizeHandler = new WindowResizeHandler(windowManager);
+        contextMenu = new WindowContextMenu();
+        
+        // 为所有窗口附加交互处理器
+        windowManager.getWindows().forEach(window => {
+            dragHandler!.attachToWindow(window);
+            resizeHandler!.attachToWindow(window);
+            contextMenu!.attachToWindow(window, () => {
+                windowManager!.removeWindow(window);
+                window.dispose();
+            });
+        });
+        
+        // 创建渲染循环（由 main.ts 接管）
+        let lastFrameTime = performance.now();
+        const renderLoop = async (): Promise<void> => {
+            if (!world || !viewportWindow || !windowManager) {
+                return;
+            }
+            
+            // 计算 deltaTime（用于 World 内部的更新逻辑）
+            const currentTime = performance.now();
+            const deltaTime = (currentTime - lastFrameTime) / 1000;
+            lastFrameTime = currentTime;
+            
+            // 更新 World（性能监控、处理器等）
+            world.update(deltaTime);
+            
+            const bounds = viewportWindow.getBounds();
+            
+            // 计算 gizmo size: 10% * min(viewportWindow.width, viewportWindow.height)
+            const gizmoSize = Math.floor(0.2 * Math.min(bounds.width, bounds.height));
+            
+            // 调用 World.render，传入 viewport 尺寸和 gizmo size
+            await world.render(bounds.width, bounds.height, gizmoSize);
+            
+            requestAnimationFrame(renderLoop);
+        };
+        
+        // 启动渲染循环
+        renderLoop();
+        
+        // 使用 ResizeObserver 监听窗口大小变化
+        const resizeObserver = new ResizeObserver(() => {
+            updateViewportSize();
+            // 调用 resizer 的 updateSize 以确保相机和渲染器尺寸同步
+            const resizer = (world as any).resizer;
+            if (resizer && resizer.updateSize) {
+                resizer.updateSize();
+            }
+        });
+        resizeObserver.observe(viewportWindow.getElement());
+        // 同时监听 Viewport 元素本身的大小变化
+        resizeObserver.observe(viewportElement);
         
         console.log('PaleEngine Editor initialized successfully');
         
