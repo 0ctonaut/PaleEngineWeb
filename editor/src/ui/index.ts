@@ -4,6 +4,7 @@ export { Popover } from './components/popover';
 export { CameraSettingsPopover } from './components/camera-settings-popover';
 export { ProfilerPanel } from './components/profiler-panel';
 export { HierarchyPanel } from './components/hierarchy-panel';
+export { InspectorPanel } from './components/inspector-panel';
 export { BottomDrawer } from './components/bottom-drawer';
 export { Bar } from './components/bar';
 export type { BarOptions } from './components/bar';

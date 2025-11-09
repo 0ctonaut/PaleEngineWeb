@@ -26,6 +26,16 @@
   overflow: hidden;
 }
 
+.window--inspector {
+  min-width: 450px;
+  min-height: 500px;
+}
+
+.window--hierarchy {
+  min-width: 300px;
+  min-height: 400px;
+}
+
 .window:after {
   content: "";
   position: absolute;

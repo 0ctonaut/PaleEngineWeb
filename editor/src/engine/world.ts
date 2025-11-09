@@ -519,6 +519,10 @@ export class World {
         this.emit('selectionchange', { selected: this.selectedObject });
     }
 
+    public requestHierarchyRefresh(): void {
+        this.emitHierarchyChange('refresh');
+    }
+
     private emitHierarchyChange(type: HierarchyChangeType, payload: { object?: Object3D | null; parent?: Object3D | null } = {}): void {
         this.emit('hierarchychange', {
             scene: this.scene,

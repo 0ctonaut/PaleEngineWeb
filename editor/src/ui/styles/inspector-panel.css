@@ -1,0 +1,194 @@
+.inspector-panel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+}
+
+.inspector-panel__content {
+  padding: 16px 16px 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.inspector-panel__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.inspector-panel__row--primary {
+  gap: 10px;
+}
+
+.inspector-panel__toggle {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.inspector-panel__name-input {
+  flex: 1;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  transition: border 0.15s ease, background 0.15s ease;
+}
+
+.inspector-panel__name-input:focus {
+  outline: none;
+  border-color: rgba(0, 106, 255, 0.6);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.inspector-panel__row--secondary {
+  justify-content: space-between;
+}
+
+.inspector-panel__label {
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  letter-spacing: 0.4px;
+}
+
+.inspector-panel__layer-select {
+  flex: 1;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border 0.15s ease, background 0.15s ease;
+}
+
+.inspector-panel__layer-select:focus {
+  outline: none;
+  border-color: rgba(0, 106, 255, 0.6);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.inspector-panel__layer-select:disabled,
+.inspector-panel__name-input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.inspector-panel__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inspector-panel__section + .inspector-panel__section {
+  margin-top: 12px;
+}
+
+.inspector-panel__section-header {
+  border: none;
+  outline: none;
+  background: rgba(0, 0, 0, 0.25);
+  color: rgba(255, 255, 255, 0.8);
+  border-radius: 6px;
+  height: 28px;
+  padding: 0 12px;
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.inspector-panel__section-header:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.inspector-panel__section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inspector-panel__section.is-collapsed .inspector-panel__section-content {
+  display: none;
+}
+
+.inspector-panel__section--disabled {
+  opacity: 0.5;
+}
+
+.inspector-panel__transform-row {
+  display: grid;
+  grid-template-columns: 60px repeat(3, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.inspector-panel__transform-label {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
+
+.inspector-panel__axis-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inspector-panel__axis-button {
+  border: none;
+  border-radius: 4px;
+  width: 26px;
+  height: 26px;
+  background: rgba(0, 0, 0, 0.25);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.inspector-panel__axis-button:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.inspector-panel__axis-input {
+  flex: none;
+  width: 50px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+  transition: border 0.15s ease, background 0.15s ease;
+}
+
+.inspector-panel__axis-input:focus {
+  outline: none;
+  border-color: rgba(0, 106, 255, 0.6);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.inspector-panel__axis-input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+
