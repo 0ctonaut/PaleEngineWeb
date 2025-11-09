@@ -11,7 +11,7 @@ export type CubeSize = number | [number, number, number];
 
 export function createCube(
     size: CubeSize = [1, 1, 1], 
-    color: string = 'purple',
+    color: string = 'white',
     layer: number = Layers.DEFAULT
 ): Mesh {
     const dimensions = _normalizeDimensions(size);
@@ -31,7 +31,7 @@ export function createCube(
 export function createSphere(
     radius: number = 1,
     segments: number = 32,
-    color: string = 'orange',
+    color: string = 'white',
     layer: number = Layers.DEFAULT
 ): Mesh {
     // Parameter validation

@@ -1,4 +1,4 @@
-import { Mesh, Raycaster, Vector2 } from 'three';
+import { Object3D, Raycaster, Vector2 } from 'three';
 import { InputProcessor } from './input-processor';
 import { EventTypes, InputEvent } from '../input';
 import { SelectionCategory } from '@paleengine/core';
@@ -6,7 +6,7 @@ import { SelectionCategory } from '@paleengine/core';
 export class SelectionProcessor extends InputProcessor {
     private mouseDownPosition: { x: number; y: number } | null = null;
     private raycaster: Raycaster;
-    private selectedMesh: Mesh | null = null;
+    private selectedObject: Object3D | null = null;
     private clickThreshold: number = 5;
 
     constructor(world: any, inputManager: any) {
@@ -68,24 +68,24 @@ export class SelectionProcessor extends InputProcessor {
         });
 
         if (selectableIntersect) {
-            this.selectMesh(selectableIntersect.object as Mesh);
+            this.selectObject(selectableIntersect.object);
         } else {
-            this.deselectMesh();
+            this.deselectObject();
         }
     }
 
-    private selectMesh(mesh: Mesh): void {
-        this.selectedMesh = mesh;
-        this.world.setSelectedMesh(mesh);
+    private selectObject(object: Object3D): void {
+        this.selectedObject = object;
+        this.world.setSelectedObject(object);
     }
 
-    private deselectMesh(): void {
-        this.selectedMesh = null;
-        this.world.setSelectedMesh(null);
+    private deselectObject(): void {
+        this.selectedObject = null;
+        this.world.setSelectedObject(null);
     }
 
-    public getSelectedMesh(): Mesh | null {
-        return this.selectedMesh;
+    public getSelectedObject(): Object3D | null {
+        return this.selectedObject;
     }
 
     public update(_deltaTime: number): void {

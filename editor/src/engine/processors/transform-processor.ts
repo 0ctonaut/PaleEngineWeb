@@ -1,5 +1,5 @@
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
-import { Mesh, Object3D } from 'three/webgpu';
+import { Object3D } from 'three/webgpu';
 import { InputProcessor } from './input-processor';
 import { EventTypes, InputEvent, Keys } from '../input';
 import { TransformCommand, TransformState } from '../commands';
@@ -99,17 +99,17 @@ export class TransformProcessor extends InputProcessor {
 
   public update(_deltaTime: number): void {
     // Check for selection changes and update attachment
-    const selectedMesh = this.world.getSelectedMesh();
-    if (selectedMesh !== this.currentAttachment) {
-      this.updateAttachment(selectedMesh);
+    const selectedObject = this.world.getSelectedObject();
+    if (selectedObject !== this.currentAttachment) {
+      this.updateAttachment(selectedObject);
     }
   }
 
-  private updateAttachment(mesh: Mesh | null): void {
-    if (mesh) {
-      this.controls.attach(mesh);
+  private updateAttachment(object: Object3D | null): void {
+    if (object) {
+      this.controls.attach(object);
       this.controls.getHelper().visible = true;
-      this.currentAttachment = mesh;
+      this.currentAttachment = object;
     } else {
       this.controls.detach();
       this.controls.getHelper().visible = false;

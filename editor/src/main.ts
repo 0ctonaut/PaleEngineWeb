@@ -1,5 +1,5 @@
 import { World } from './engine/world';
-import { Toolbar, WindowManager, Viewport, WindowDragHandler, WindowResizeHandler, WindowContextMenu, ProfilerPanel } from './ui';
+import { Toolbar, WindowManager, Viewport, WindowDragHandler, WindowResizeHandler, WindowContextMenu, ProfilerPanel, HierarchyPanel } from './ui';
 
 let world: World | null = null;
 let toolbar: Toolbar | null = null;
@@ -115,6 +115,12 @@ function main(): void {
         };
         updateViewportSize();
         
+        // 创建 Hierarchy 窗口
+        const hierarchyPanel = new HierarchyPanel(world);
+        const hierarchyWindow = windowManager.createWindow('Hierarchy', hierarchyPanel);
+        hierarchyWindow.setPosition(20, 100);
+        hierarchyWindow.setSize(280, 500);
+
         // 创建 Profiler 窗口
         const profilerPanel = new ProfilerPanel(world.getPerformanceMonitor());
         const profilerWindow = windowManager.createWindow('Profiler', profilerPanel);

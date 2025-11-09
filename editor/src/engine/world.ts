@@ -1,17 +1,18 @@
-import { 
-    createCamera, 
-    createScene, 
-    createRenderer, 
-    createCube, 
-    createSphere, 
-    createLights, 
-    Resizer 
+import {
+    createCamera,
+    createScene,
+    createRenderer,
+    createCube,
+    createSphere,
+    createLights,
+    Resizer,
+    SelectionCategory
 } from '@paleengine/core';
-import { PerspectiveCamera, WebGPURenderer, Scene, Mesh, Color } from 'three/webgpu';
+import { PerspectiveCamera, WebGPURenderer, Scene, Mesh, Color, Object3D } from 'three/webgpu';
 import { LocalInputManager, InputContext, EventTypes, InputEvent } from './input';
-import { 
-    OutlineRenderer, 
-    OutlineConfig, 
+import {
+    OutlineRenderer,
+    OutlineConfig,
     PassManager,
     SceneRenderPass,
     ViewHelperGizmoPass
@@ -22,6 +23,20 @@ import { ProcessorManager, SelectionProcessor, TransformProcessor, UndoRedoProce
 import { CommandManager } from './commands';
 import { PerformanceMonitor } from './profiler';
 
+export type HierarchyChangeType = 'refresh' | 'add' | 'remove';
+
+export interface HierarchyChangeEvent {
+    scene: Scene;
+    type: HierarchyChangeType;
+    object?: Object3D | null;
+    parent?: Object3D | null;
+}
+
+export type WorldEventMap = {
+    selectionchange: { selected: Object3D | null };
+    hierarchychange: HierarchyChangeEvent;
+};
+
 export class World {
     private readonly camera: PerspectiveCamera;
     private readonly renderer: WebGPURenderer;
@@ -31,11 +46,15 @@ export class World {
     private isDisposed: boolean = false;
     private inputManager!: LocalInputManager;
     private canvasInputContext!: InputContext;
-    private selectedMesh: Mesh | null = null;
+    private selectedObject: Object3D | null = null;
     private resizer!: Resizer;
     private cameraController!: OrbitCameraController;
     private container!: HTMLElement;
-    
+    private readonly eventListeners: { [K in keyof WorldEventMap]: Set<(event: WorldEventMap[K]) => void> } = {
+        selectionchange: new Set(),
+        hierarchychange: new Set()
+    };
+
     public setContainer(container: HTMLElement): void {
         this.container = container;
         if (this.resizer) {
@@ -163,14 +182,61 @@ export class World {
     public addMesh(mesh: Mesh): void {
         this.scene.add(mesh);
         this.meshes.push(mesh);
+        this.emitHierarchyChange('add', { object: mesh, parent: mesh.parent ?? null });
     }
 
     public removeMesh(mesh: Mesh): void {
+        const parent = mesh.parent ?? null;
         this.scene.remove(mesh);
         const index = this.meshes.indexOf(mesh);
         if (index > -1) {
             this.meshes.splice(index, 1);
         }
+
+        if (this.selectedObject === mesh) {
+            this.setSelectedObject(null);
+        }
+
+        this.emitHierarchyChange('remove', { object: mesh, parent });
+    }
+
+    public createPrimitive(type: 'cube' | 'sphere', parent?: Object3D | null): Object3D {
+        let object: Object3D;
+
+        switch (type) {
+            case 'sphere':
+                object = createSphere();
+                break;
+            case 'cube':
+                object = createCube();
+                break;
+            default:
+                throw new Error(`Unknown primitive type: ${type}`);
+        }
+
+        const targetParent = parent ?? this.scene;
+        targetParent.add(object);
+
+        if (!object.name || object.name.trim().length === 0) {
+            object.name = this.generatePrimitiveName(type);
+        }
+
+        if (object instanceof Mesh) {
+            this.meshes.push(object);
+        }
+
+        if (!object.userData.selectionCategory) {
+            object.userData.selectionCategory = SelectionCategory.SCENE_OBJECT;
+        }
+
+        this.emitHierarchyChange('add', { object, parent: targetParent });
+        this.setSelectedObject(object);
+        return object;
+    }
+
+    private generatePrimitiveName(type: 'cube' | 'sphere'): string {
+        const baseName = type.charAt(0).toUpperCase() + type.slice(1);
+        return `${baseName}`;
     }
 
     private initializeScene(): void {
@@ -179,19 +245,25 @@ export class World {
         
         const cube = createCube();
         cube.position.set(-2, 0, 0);
+        cube.name = 'Example-Cube';
         this.addMesh(cube);
 
         const sphere = createSphere(1, 8, 'orange');
         sphere.position.set(2, 0, 0);
+        sphere.name = 'Example-Sphere';
         this.addMesh(sphere);
 
         const floor = createCube([10, 1, 10], 'gray');
         floor.position.set(0, -2, 0);
+        floor.name = 'Example-Floor';
         this.scene.add(floor);
 
         const light = createLights();
         light.position.set(10, 10, 10);
+        light.name = 'Example-Light';
         this.scene.add(light);
+
+        this.emitHierarchyChange('refresh');
     }
 
     private setupRenderer(container: HTMLElement): void {
@@ -397,15 +469,24 @@ export class World {
         return this.renderer;
     }
 
-    public setSelectedMesh(mesh: Mesh | null): void {
-        this.selectedMesh = mesh;
-        if (this.sceneRenderPass && this.sceneRenderPass.isOutlineEnabled()) {
-            this.sceneRenderPass.setSelectedObjects(mesh ? [mesh] : []);
+    public setSelectedObject(object: Object3D | null): void {
+        if (this.selectedObject === object) {
+            return;
         }
+
+        this.selectedObject = object;
+        if (this.sceneRenderPass && this.sceneRenderPass.isOutlineEnabled()) {
+            if (object instanceof Mesh) {
+                this.sceneRenderPass.setSelectedObjects([object]);
+            } else {
+                this.sceneRenderPass.setSelectedObjects([]);
+            }
+        }
+        this.emitSelectionChange();
     }
 
-    public getSelectedMesh(): Mesh | null {
-        return this.selectedMesh;
+    public getSelectedObject(): Object3D | null {
+        return this.selectedObject;
     }
 
     public getCommandManager(): CommandManager {
@@ -418,5 +499,32 @@ export class World {
 
     public getPerformanceMonitor(): PerformanceMonitor {
         return this.performanceMonitor;
+    }
+
+    public on<K extends keyof WorldEventMap>(type: K, listener: (event: WorldEventMap[K]) => void): void {
+        this.eventListeners[type].add(listener);
+    }
+
+    public off<K extends keyof WorldEventMap>(type: K, listener: (event: WorldEventMap[K]) => void): void {
+        this.eventListeners[type].delete(listener);
+    }
+
+    private emit<K extends keyof WorldEventMap>(type: K, event: WorldEventMap[K]): void {
+        this.eventListeners[type].forEach(listener => {
+            listener(event);
+        });
+    }
+
+    private emitSelectionChange(): void {
+        this.emit('selectionchange', { selected: this.selectedObject });
+    }
+
+    private emitHierarchyChange(type: HierarchyChangeType, payload: { object?: Object3D | null; parent?: Object3D | null } = {}): void {
+        this.emit('hierarchychange', {
+            scene: this.scene,
+            type,
+            object: payload.object ?? null,
+            parent: payload.parent ?? null
+        });
     }
 }

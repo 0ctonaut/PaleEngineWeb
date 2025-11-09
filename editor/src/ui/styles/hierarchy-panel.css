@@ -1,0 +1,247 @@
+.hierarchy-panel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.85);
+  overflow: hidden;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+}
+
+.hierarchy-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 0 12px;
+}
+
+.hierarchy-search__button {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.hierarchy-search__button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.hierarchy-search__input {
+  flex: 1;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  transition: border 0.15s ease, background 0.15s ease;
+}
+
+.hierarchy-search__input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.hierarchy-search__input:focus {
+  outline: none;
+  border-color: rgba(0, 106, 255, 0.6);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.hierarchy-search__clear {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.45);
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.hierarchy-search__clear.is-visible {
+  opacity: 0.6;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.hierarchy-search__clear.is-visible:hover {
+  opacity: 0.9;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.hierarchy-tree {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 8px 0;
+}
+
+.hierarchy-node {
+  position: relative;
+}
+
+.hierarchy-node__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  line-height: 24px;
+  padding: 0 12px 0 calc(12px + (var(--depth, 0) * 16px));
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease, color 0.15s ease;
+  border-radius: 6px;
+  margin: 0 6px;
+}
+
+.hierarchy-node__category {
+  flex: 0 0 auto;
+  height: 20px;
+  padding: 0 2px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 20px;
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 0.5px;
+}
+
+.hierarchy-node__header:not(.hierarchy-node__header--selected):hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.hierarchy-node__header--selected {
+  background: linear-gradient(135deg, rgba(0, 106, 255, 0.85), rgba(80, 140, 255, 0.85));
+  color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 8px 18px rgba(0, 106, 255, 0.25);
+}
+.hierarchy-node__header--selected:hover {
+  background: linear-gradient(135deg, rgba(0, 106, 255, 0.85), rgba(80, 140, 255, 0.85));
+}
+
+.hierarchy-node__label {
+  text-align: left;
+  flex: 1;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.hierarchy-node__label-input {
+  text-align: left;
+  flex: 1;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.hierarchy-node__label-input:focus {
+  outline: none;
+  border-color: rgba(0, 106, 255, 0.8);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.hierarchy-node__toggle {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hierarchy-node__toggle {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.hierarchy-node__toggle--hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.hierarchy-node__toggle:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.hierarchy-node__toggle::before {
+  content: '⯈';
+  display: inline-block;
+  transform-origin: center;
+  transition: transform 0.15s ease;
+  transform: rotate(90deg);
+  font-size: 12px;
+}
+
+.hierarchy-node__toggle.is-collapsed::before,
+.hierarchy-node__header.is-collapsed .hierarchy-node__toggle::before {
+  transform: rotate(0deg);
+}
+
+.hierarchy-node__toggle.is-empty {
+  visibility: hidden;
+}
+
+.hierarchy-node__toggle.is-empty::before {
+  content: none;
+}
+
+.hierarchy-node__children {
+  display: none;
+}
+
+.hierarchy-node__header--leaf .hierarchy-node__toggle {
+  visibility: hidden;
+}
+
+.hierarchy-panel::-webkit-scrollbar,
+.hierarchy-tree::-webkit-scrollbar {
+  width: 8px;
+}
+
+.hierarchy-panel::-webkit-scrollbar-thumb,
+.hierarchy-tree::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+.hierarchy-panel::-webkit-scrollbar-thumb:hover,
+.hierarchy-tree::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.hierarchy-context-menu {
+  min-width: 180px;
+}
+

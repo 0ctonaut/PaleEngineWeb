@@ -73,13 +73,23 @@ export class GlobalInputManager {
    */
   private handleKeyDown(e: KeyboardEvent): void {
     this.keyStates.set(e.code, true);
+    this.notifyGlobalSubscribers('keydown', e);
     this.distributeEvent(e);
   }
   
   private handleKeyUp(e: KeyboardEvent): void {
     this.keyStates.set(e.code, false);
+    this.notifyGlobalSubscribers('keyup', e);
     this.distributeEvent(e);
   }
+  public onGlobalKeyDown(handler: (e: KeyboardEvent) => void): () => void {
+    return this.subscribeGlobalEvent('keydown', handler as (event: MouseEvent | KeyboardEvent | WheelEvent) => void);
+  }
+
+  public onGlobalKeyUp(handler: (e: KeyboardEvent) => void): () => void {
+    return this.subscribeGlobalEvent('keyup', handler as (event: MouseEvent | KeyboardEvent | WheelEvent) => void);
+  }
+
   
   /**
    * Handle mouse events
