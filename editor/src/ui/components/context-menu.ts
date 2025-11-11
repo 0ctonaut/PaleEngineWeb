@@ -1,4 +1,4 @@
-import { LocalInputManager, EventTypes, InputEvent, GlobalInputManager } from '../../engine/input';
+import { LocalInputManager, EventTypes, InputEvent, GlobalInputManager } from '../../engine';
 
 export interface ContextMenuItem {
     label: string;

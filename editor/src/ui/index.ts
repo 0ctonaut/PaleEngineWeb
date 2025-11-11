@@ -15,7 +15,9 @@ export type { ParameterConfig } from './components/parameter-control';
 export type { LineChartData, LineChartOptions } from './components/chart';
 
 // Window system
-export { Window, WindowManager, Panel, Viewport } from './components/window';
-export type { WindowContentType, SplitDirection, WindowContent, SplitContent, TabContent } from './components/window';
+export { Window, WindowContainer, WindowManager, Panel, Viewport } from './components/window';
+export type { WindowContainerContentType } from './components/window';
+export { Tab, TabGroup, createLeafNode, createSplitNode } from './components/window/window-layout';
+export type { LayoutNode, SplitDirection } from './components/window/window-layout';
 export { WindowDragHandler, WindowResizeHandler, WindowContextMenu } from './components/interaction';
 export { ContextMenu } from './components/context-menu';

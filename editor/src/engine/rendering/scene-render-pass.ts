@@ -109,7 +109,7 @@ export class SceneRenderPass implements RenderPass {
             }
             
             // 直接渲染场景
-            await renderer.render(this.scene, this.camera);
+            await renderer.renderAsync(this.scene, this.camera);
             return;
         }
 

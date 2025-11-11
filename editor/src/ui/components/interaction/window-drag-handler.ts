@@ -1,10 +1,9 @@
-import { Window } from '../window/window';
-import { WindowManager } from '../window/window-manager';
-import { InputEvent, EventTypes, GlobalInputManager } from '../../../engine/input';
+import { WindowContainer, WindowManager } from '../window';
+import { InputEvent, EventTypes, GlobalInputManager } from '../../../engine';
 
 export class WindowDragHandler {
     private windowManager: WindowManager;
-    private draggingWindow: Window | null = null;
+    private draggingWindow: WindowContainer | null = null;
     private dragStartPos: { x: number; y: number } = { x: 0, y: 0 };
     private windowStartPos: { x: number; y: number } = { x: 0, y: 0 };
     private isDragging: boolean = false;
@@ -20,36 +19,43 @@ export class WindowDragHandler {
     private globalInputManager: GlobalInputManager;
     
     // 吸附相关
-    private edgeDockThreshold: number = 50;
-    private tabMergeThreshold: number = 30;
+    private edgeDockThresholdRatio: number = 0.1; // 靠近边缘 10% 进入预吸附
+    private edgeDockThresholdRatioMax: number = 0.2; // 靠近边缘 10% 进入预吸附
+    private dockPreviewElement: HTMLElement | null = null;
+    private attachedWindowIds: Set<string> = new Set();
     
     constructor(windowManager: WindowManager) {
         this.windowManager = windowManager;
         this.globalInputManager = GlobalInputManager.getInstance();
+        this.windowManager.registerWindowAttacher((container: WindowContainer) => this.attachToWindow(container));
     }
     
-    public attachToWindow(window: Window): void {
+    public attachToWindow(window: WindowContainer): void {
+        if (this.attachedWindowIds.has(window.getId())) {
+            return;
+        }
+        this.attachedWindowIds.add(window.getId());
         const inputManager = window.getInputManager();
-        const titleTab = window.getElement().querySelector('.window-title-tab') as HTMLElement;
-        
-        if (!titleTab) return;
-        
-        // 鼠标按下
         inputManager.on(EventTypes.MOUSE_DOWN, (event: InputEvent) => {
-            if (window.getContentType() === 'single' && event.target && titleTab.contains(event.target)) {
-                event.preventDefault();
-                event.stopPropagation();
-                this.startDrag(window, event);
-            }
+            if (!event.target) return;
+            if (!window.shouldStartWindowDragFrom(event.target)) return;
+            if (typeof event.button === 'number' && event.button !== 0) return;
+            event.preventDefault();
+            event.stopPropagation();
+            this.startDrag(window, event);
         });
     }
     
-    private startDrag(window: Window, event: InputEvent): void {
+    private startDrag(window: WindowContainer, event: InputEvent): void {
         this.draggingWindow = window;
         this.isDragging = true;
         this.dragStartPos = { x: event.globalPosition.x, y: event.globalPosition.y };
         const bounds = window.getBounds();
         this.windowStartPos = { x: bounds.x, y: bounds.y };
+
+        if (window.isDockedWindow()) {
+            window.setDockedState(false);
+        }
         
         // 缓存 workspace 矩形（只在开始时获取一次）
         const workspace = this.windowManager.getWorkspaceElement();
@@ -74,23 +80,11 @@ export class WindowDragHandler {
     private handleGlobalMouseMove(e: MouseEvent): void {
         if (!this.isDragging || !this.draggingWindow || !this.cachedWorkspaceRect) return;
         
-        // 使用缓存的 workspace 矩形
         const workspaceRect = this.cachedWorkspaceRect;
         
-        // 检查鼠标是否在 workspace 范围内
         const mouseX = e.clientX;
         const mouseY = e.clientY;
         
-        const isInWorkspace = mouseX >= workspaceRect.left && 
-                              mouseX <= workspaceRect.right &&
-                              mouseY >= workspaceRect.top && 
-                              mouseY <= workspaceRect.bottom;
-        
-        if (!isInWorkspace) {
-            // 超出 workspace 范围，结束拖拽
-            this.endDrag(e);
-            return;
-        }
         
         // 计算相对于 workspace 的坐标
         const relativeX = mouseX - workspaceRect.left;
@@ -104,6 +98,13 @@ export class WindowDragHandler {
         const newY = this.windowStartPos.y + deltaY;
         
         this.draggingWindow.setPosition(newX, newY);
+
+        const edgeDock = this.checkEdgeDock({ x: relativeX, y: relativeY }, workspaceRect, this.draggingWindow);
+        if (edgeDock) {
+            this.showEdgeDockPreview(edgeDock.edge, workspaceRect);
+        } else {
+            this.hideEdgeDockPreview();
+        }
     }
     
     private handleGlobalMouseUp(e: MouseEvent): void {
@@ -132,6 +133,8 @@ export class WindowDragHandler {
         // 取消订阅全局事件
         this.cleanupGlobalSubscriptions();
         
+        this.hideEdgeDockPreview();
+
         this.draggingWindow = null;
         this.isDragging = false;
     }
@@ -160,18 +163,14 @@ export class WindowDragHandler {
         };
         
         // 检测边缘吸附
-        const edgeDock = this.checkEdgeDock(mousePos, workspaceRect);
+        const edgeDock = this.checkEdgeDock(mousePos, workspaceRect, this.draggingWindow);
         if (edgeDock) {
-            // TODO: 实现边缘吸附
+            this.dockWindowToEdge(edgeDock.edge, workspaceRect);
+            this.hideEdgeDockPreview();
             return;
         }
-        
-        // 检测标签页合并
-        const tabMerge = this.checkTabMerge(globalMousePos);
-        if (tabMerge) {
-            // TODO: 实现标签页合并
-            return;
-        }
+
+        this.draggingWindow.setDockedState(false);
         
         // 检测窗口拆分
         const windowSplit = this.checkWindowSplit(globalMousePos);
@@ -181,51 +180,154 @@ export class WindowDragHandler {
         }
     }
     
-    private checkEdgeDock(mousePos: { x: number; y: number }, workspaceRect: DOMRect): { edge: 'top' | 'bottom' | 'left' | 'right' } | null {
+    private checkEdgeDock(mousePos: { x: number; y: number }, workspaceRect: DOMRect, draggingWindow: WindowContainer | null): { edge: 'top' | 'bottom' | 'left' | 'right' } | null {
         const { x, y } = mousePos;
-        
-        if (Math.abs(x - 0) < this.edgeDockThreshold) {
-            return { edge: 'left' };
+        const metrics = this.getDockMetrics(workspaceRect, draggingWindow);
+
+        const distances: Array<{ edge: 'top' | 'bottom' | 'left' | 'right'; distance: number }> = [];
+
+        const leftDistance = x;
+        const rightDistance = workspaceRect.width - x;
+        const normalizedY = Math.max(0, y - metrics.topOverlap);
+        const topDistance = normalizedY;
+        const bottomDistance = Math.max(0, metrics.availableHeight - normalizedY);
+
+        if (leftDistance <= metrics.horizontalThreshold) {
+            distances.push({ edge: 'left', distance: leftDistance });
         }
-        if (Math.abs(x - workspaceRect.width) < this.edgeDockThreshold) {
-            return { edge: 'right' };
+        if (rightDistance <= metrics.horizontalThreshold) {
+            distances.push({ edge: 'right', distance: rightDistance });
         }
-        if (Math.abs(y - 0) < this.edgeDockThreshold) {
-            return { edge: 'top' };
+        if (metrics.availableHeight > 0 && topDistance <= metrics.verticalThreshold) {
+            distances.push({ edge: 'top', distance: topDistance });
         }
-        if (Math.abs(y - workspaceRect.height) < this.edgeDockThreshold) {
-            return { edge: 'bottom' };
+        if (metrics.availableHeight > 0 && bottomDistance <= metrics.verticalThreshold) {
+            distances.push({ edge: 'bottom', distance: bottomDistance });
         }
-        
-        return null;
+
+        if (distances.length === 0) {
+            return null;
+        }
+
+        distances.sort((a, b) => a.distance - b.distance);
+        return { edge: distances[0].edge };
+    }
+
+    private showEdgeDockPreview(edge: 'top' | 'bottom' | 'left' | 'right', workspaceRect: DOMRect): void {
+        const workspace = this.windowManager.getWorkspaceElement();
+        if (!this.dockPreviewElement) {
+            this.dockPreviewElement = document.createElement('div');
+            this.dockPreviewElement.className = 'window-dock-preview';
+            workspace.appendChild(this.dockPreviewElement);
+        }
+
+        const targetRect = this.getDockRect(edge, workspaceRect, this.draggingWindow);
+        this.dockPreviewElement.style.left = `${targetRect.x}px`;
+        this.dockPreviewElement.style.top = `${targetRect.y}px`;
+        this.dockPreviewElement.style.width = `${targetRect.width}px`;
+        this.dockPreviewElement.style.height = `${targetRect.height}px`;
+        this.dockPreviewElement.style.display = 'block';
+    }
+
+    private hideEdgeDockPreview(): void {
+        if (this.dockPreviewElement && this.dockPreviewElement.parentNode) {
+            this.dockPreviewElement.parentNode.removeChild(this.dockPreviewElement);
+        }
+        this.dockPreviewElement = null;
+    }
+
+    private dockWindowToEdge(edge: 'top' | 'bottom' | 'left' | 'right', workspaceRect: DOMRect): void {
+        if (!this.draggingWindow) return;
+
+        this.draggingWindow.setDockedState(true, edge);
+        const targetRect = this.getDockRect(edge, workspaceRect, this.draggingWindow);
+        this.draggingWindow.setPosition(targetRect.x, targetRect.y);
+        this.draggingWindow.setSize(targetRect.width, targetRect.height);
+    }
+
+    private getDockRect(edge: 'top' | 'bottom' | 'left' | 'right', workspaceRect: DOMRect, draggingWindow: WindowContainer | null): { x: number; y: number; width: number; height: number } {
+        if (draggingWindow == null) {
+            return {
+                x: 0,
+                y: 0,
+                width: 0,
+                height: 0
+            };
+        }
+
+        const metrics = this.getDockMetrics(workspaceRect, draggingWindow);
+        const horizontalDockWidth = metrics.horizontalThreshold;
+        const verticalDockHeight = metrics.verticalThreshold;
+
+        switch (edge) {
+            case 'top':
+                return {
+                    x: 0,
+                    y: metrics.topOverlap,
+                    width: metrics.availableWidth,
+                    height: verticalDockHeight
+                };
+            case 'bottom':
+                return {
+                    x: 0,
+                    y: metrics.topOverlap + Math.max(0, metrics.availableHeight - verticalDockHeight),
+                    width: metrics.availableWidth,
+                    height: verticalDockHeight
+                };
+            case 'left':
+                return {
+                    x: 0,
+                    y: metrics.topOverlap,
+                    width: horizontalDockWidth,
+                    height: metrics.availableHeight
+                };
+            case 'right':
+            default:
+                return {
+                    x: Math.max(0, metrics.availableWidth - horizontalDockWidth),
+                    y: metrics.topOverlap,
+                    width: horizontalDockWidth,
+                    height: metrics.availableHeight
+                };
+        }
+    }
+
+    private getDockMetrics(workspaceRect: DOMRect, draggingWindow: WindowContainer | null) {
+        const toolbarHeight = typeof (this.windowManager as any).getToolbarHeight === 'function'
+            ? this.windowManager.getToolbarHeight()
+            : 0;
+        const topOverlap = Math.max(0, toolbarHeight - workspaceRect.top);
+        const availableWidth = Math.max(0, workspaceRect.width);
+        const availableHeight = Math.max(0, workspaceRect.height - topOverlap);
+
+        const windowBounds = draggingWindow?.getBounds();
+        const windowWidth = windowBounds ? windowBounds.width : 0;
+        const windowHeight = windowBounds ? windowBounds.height : 0;
+
+        const baseHorizontal = workspaceRect.width * this.edgeDockThresholdRatio;
+        const baseVertical = availableHeight * this.edgeDockThresholdRatio;
+
+        const horizontalThreshold = Math.min(
+            Math.max(baseHorizontal, windowWidth),
+            availableWidth * this.edgeDockThresholdRatioMax
+        );
+        const verticalThreshold = Math.min(
+            Math.max(baseVertical, windowHeight),
+            availableHeight * this.edgeDockThresholdRatioMax,
+            availableHeight
+        );
+
+        return {
+            topOverlap,
+            availableWidth,
+            availableHeight,
+            horizontalThreshold,
+            verticalThreshold
+        };
     }
     
-    private checkTabMerge(mousePos: { x: number; y: number }): Window | null {
-        const windows = this.windowManager.getWindows();
-        
-        for (const window of windows) {
-            if (window === this.draggingWindow) continue;
-            if (window.getContentType() !== 'single') continue;
-            
-            const titleTab = window.getElement().querySelector('.window-title-tab') as HTMLElement;
-            if (!titleTab) continue;
-            
-            const rect = titleTab.getBoundingClientRect();
-            const distance = Math.sqrt(
-                Math.pow(mousePos.x - (rect.left + rect.width / 2), 2) +
-                Math.pow(mousePos.y - (rect.top + rect.height / 2), 2)
-            );
-            
-            if (distance < this.tabMergeThreshold) {
-                return window;
-            }
-        }
-        
-        return null;
-    }
-    
-    private checkWindowSplit(mousePos: { x: number; y: number }): { window: Window; direction: 'horizontal' | 'vertical' } | null {
-        const windows = this.windowManager.getWindows();
+    private checkWindowSplit(mousePos: { x: number; y: number }): { window: WindowContainer; direction: 'horizontal' | 'vertical' } | null {
+        const windows = this.windowManager.getContainers();
         
         for (const window of windows) {
             if (window === this.draggingWindow) continue;

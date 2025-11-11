@@ -104,7 +104,7 @@ const sphere = createSphere(1, 32, 'blue');
 import { World } from '@paleengine/core';
 
 // Editor will initialize automatically
-const world = new World('#scene-container');
+const world = new World('#workspace');
 ```
 
 ### 3. Custom Editor

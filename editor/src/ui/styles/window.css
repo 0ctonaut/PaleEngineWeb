@@ -15,6 +15,7 @@
 .window {
   position: absolute;
   display: block;
+  --window-title-height: 32px;
   box-shadow: 0 40px 60px rgba(0, 0, 0, 0.2), 0 0 15px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0, 0, 0, 0.5);
   transition: all 0.1s, top 0.1s ease-in-out, left 0.1s ease-in-out, transform 0.1s ease-in-out, width 0.1s ease-in-out, height 0.1s ease-in-out;
   z-index: 1;
@@ -64,48 +65,30 @@
   will-change: transform;
 }
 
+.window-dock-preview {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  border-radius: 10px;
+  border: 2px solid rgba(0, 170, 255, 0.6);
+  background: rgba(0, 170, 255, 0.2);
+  box-shadow: 0 0 20px rgba(0, 170, 255, 0.35);
+  z-index: 2000;
+}
+
 .window.resizing {
   transition: 0s;
-}
-
-/* 标题标签 */
-.window-title-tab {
-  position: relative;
-  height: 24px;
-  line-height: 24px;
-  padding: 0 12px;
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.65);
-  background: rgba(255, 255, 255, 0.05);
-  background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.025), rgba(0, 0, 0, 0.05));
-  box-shadow: inset 0 -1px 0 0 rgba(255, 255, 255, 0.05), 0 1px 5px 0 rgba(0, 0, 0, 0.1);
-  cursor: move;
-  user-select: none;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  border-radius: 10px 10px 0 0;
-}
-
-.window-title-tab:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.window.window--active .window-title-tab {
-  color: rgba(255, 255, 255, 0.65);
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
 }
 
 /* 内容区 */
 .window-content {
   position: relative;
   width: 100%;
-  height: calc(100% - 24px);
-  overflow: hidden;
-}
-
-.window-content:has(.window-title-tab[style*="display: none"]) {
   height: 100%;
+  overflow: hidden;
 }
 
 /* Panel 和 Viewport */
@@ -180,18 +163,21 @@
 }
 
 /* Tab 布局 */
-.window-tab-container {
+.window-leaf {
   position: relative;
-  width: 100%;
-  height: 100%;
   display: flex;
   flex-direction: column;
+  width: 100%;
+  height: 100%;
 }
 
 .window-tab-bar {
+  position: relative;
   display: flex;
   flex-direction: row;
+  align-items: center;
   height: 28px;
+  padding: 0 4px;
   background: rgba(255, 255, 255, 0.05);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   overflow-x: auto;
@@ -200,31 +186,67 @@
 
 .window-tab {
   position: relative;
-  height: 28px;
-  line-height: 28px;
+  height: 24px;
+  line-height: 24px;
   padding: 0 12px;
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.5);
+  margin: 0 2px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
   background: rgba(0, 0, 0, 0.2);
   cursor: pointer;
   white-space: nowrap;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px 6px 0 0;
   user-select: none;
 }
 
 .window-tab:hover {
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.35);
 }
 
 .window-tab.active {
-  background: none;
-  color: rgba(255, 255, 255, 0.9);
+  background: rgba(0, 0, 0, 0.5);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.window-tab-insert-preview {
+  position: absolute;
+  top: 4px;
+  width: 2px;
+  height: calc(100% - 8px);
+  background: rgba(0, 170, 255, 0.8);
+  border-radius: 1px;
+  pointer-events: none;
 }
 
 .window-tab-content {
   flex: 1;
   position: relative;
   overflow: hidden;
+  display: flex;
+}
+
+.window-tab-content > * {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+}
+
+.window-split {
+  width: 100%;
+  height: 100%;
+}
+
+.window-split-pane {
+  display: flex;
+  flex: 1 1 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.window-split-pane .window-leaf,
+.window-split-pane .window-split {
+  width: 100%;
+  height: 100%;
 }
 
 /* 调整大小手柄 */

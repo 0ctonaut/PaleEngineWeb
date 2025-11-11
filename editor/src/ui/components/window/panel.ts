@@ -1,34 +1,35 @@
-export class Panel {
-    private element!: HTMLElement;
+import { Window } from './window';
+
+export class Panel extends Window {
     private content: HTMLElement | null = null;
-    
-    constructor(content?: HTMLElement) {
-        this.element = document.createElement('div');
-        this.element.className = 'window-panel';
-        
+
+    constructor(title: string, content?: HTMLElement) {
+        super(title);
         if (content) {
-            this.content = content;
-            this.element.appendChild(content);
+            this.setContent(content);
         }
     }
-    
+
+    protected buildContent(container: HTMLElement): void {
+        container.classList.add('window-panel');
+    }
+
     public setContent(content: HTMLElement): void {
-        if (this.content && this.content.parentNode === this.element) {
-            this.element.removeChild(this.content);
+        const host = this.getElement();
+        if (this.content && this.content.parentNode === host) {
+            host.removeChild(this.content);
         }
         this.content = content;
-        this.element.appendChild(content);
+        host.appendChild(content);
     }
-    
-    public getElement(): HTMLElement {
-        return this.element;
-    }
-    
-    public dispose(): void {
-        if (this.content && this.content.parentNode === this.element) {
-            this.element.removeChild(this.content);
+
+    public override dispose(): void {
+        const host = this.getElement();
+        if (this.content && this.content.parentNode === host) {
+            host.removeChild(this.content);
         }
         this.content = null;
+        super.dispose();
     }
 }
 

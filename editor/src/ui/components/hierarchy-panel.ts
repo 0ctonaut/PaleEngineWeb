@@ -1,9 +1,8 @@
-import { Panel } from './window/panel';
-import { World, WorldEventMap } from '../../engine/world';
+import { Panel } from './window';
+import { World, WorldEventMap } from '../../engine';
 import { Object3D, Scene } from 'three/webgpu';
 import { SelectionCategory } from '@paleengine/core';
-import { LocalInputManager } from '../../engine/input/local-input-manager';
-import { InputContext, InputEvent, EventTypes } from '../../engine/input';
+import { InputContext, InputEvent, EventTypes, LocalInputManager } from '../../engine';
 import { ContextMenu, ContextMenuItem, ContextMenuOpenConfig } from './context-menu';
 
 interface NodeEntry {
@@ -88,7 +87,7 @@ export class HierarchyPanel extends Panel {
     };
 
     public constructor(world: World) {
-        super();
+        super('Hierarchy');
         this.world = world;
         this.renderContent();
         this.setupInteraction();

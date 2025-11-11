@@ -1,4 +1,4 @@
-import { LocalInputManager, InputContext, EventTypes, InputEvent } from '../../engine/input';
+import { LocalInputManager, InputContext, EventTypes, InputEvent } from '../../engine';
 
 export type PopoverPosition = 'top' | 'bottom' | 'left' | 'right';
 export type PopoverAlignment = 'start' | 'center' | 'end';

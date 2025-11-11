@@ -21,7 +21,7 @@ h1 {
   z-index: 1;
 }
 
-#scene-container {
+#workspace {
   /* tell our scene container to take up the full page */
   position: absolute;
   width: 100%;

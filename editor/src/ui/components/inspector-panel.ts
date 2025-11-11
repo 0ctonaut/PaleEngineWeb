@@ -1,5 +1,5 @@
-import { Panel } from './window/panel';
-import { World, WorldEventMap } from '../../engine/world';
+import { Panel } from './window';
+import { World, WorldEventMap } from '../../engine';
 import { Object3D, Scene } from 'three/webgpu';
 import { Layers, SelectionCategory } from '@paleengine/core';
 
@@ -9,7 +9,7 @@ type Axis = 'x' | 'y' | 'z';
 
 export class InspectorPanel extends Panel {
     private readonly world: World;
-    private container!: HTMLElement;
+    private panelContainer!: HTMLElement;
     private headerRow!: HTMLElement;
     private secondaryRow!: HTMLElement;
     private enableCheckbox!: HTMLInputElement;
@@ -46,7 +46,7 @@ export class InspectorPanel extends Panel {
     };
 
     public constructor(world: World) {
-        super();
+        super('Inspector');
         this.world = world;
 
         this.renderContent();
@@ -58,8 +58,8 @@ export class InspectorPanel extends Panel {
         const element = this.getElement();
         element.classList.add('inspector-panel');
 
-        this.container = document.createElement('div');
-        this.container.className = 'inspector-panel__content';
+        this.panelContainer = document.createElement('div');
+        this.panelContainer.className = 'inspector-panel__content';
 
         this.headerRow = document.createElement('div');
         this.headerRow.className = 'inspector-panel__row inspector-panel__row--primary';
@@ -108,12 +108,12 @@ export class InspectorPanel extends Panel {
         });
         this.secondaryRow.appendChild(this.layerSelect);
 
-        this.container.appendChild(this.headerRow);
-        this.container.appendChild(this.secondaryRow);
+        this.panelContainer.appendChild(this.headerRow);
+        this.panelContainer.appendChild(this.secondaryRow);
 
         this.createTransformSection();
 
-        element.appendChild(this.container);
+        element.appendChild(this.panelContainer);
 
         this.setControlsEnabled(false);
     }
@@ -246,7 +246,7 @@ export class InspectorPanel extends Panel {
         this.transformSection.appendChild(header);
         this.transformSection.appendChild(this.transformContent);
 
-        this.container.appendChild(this.transformSection);
+        this.panelContainer.appendChild(this.transformSection);
     }
 
     private createTransformRow(type: TransformType, label: string): HTMLElement {

@@ -1,10 +1,9 @@
-import { Window } from '../window/window';
-import { WindowManager } from '../window/window-manager';
-import { InputEvent, EventTypes, GlobalInputManager } from '../../../engine/input';
+import { WindowContainer, WindowManager } from '../window';
+import { InputEvent, EventTypes, GlobalInputManager } from '../../../engine';
 
 export class WindowResizeHandler {
     private windowManager: WindowManager;
-    private resizingWindow: Window | null = null;
+    private resizingWindow: WindowContainer | null = null;
     private resizeHandle: 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw' | null = null;
     private resizeStartPos: { x: number; y: number } = { x: 0, y: 0 };
     private windowStartBounds: { x: number; y: number; width: number; height: number } = { x: 0, y: 0, width: 0, height: 0 };
@@ -16,13 +15,19 @@ export class WindowResizeHandler {
     
     // 全局输入管理器
     private globalInputManager: GlobalInputManager;
+    private attachedWindowIds: Set<string> = new Set();
     
     constructor(windowManager: WindowManager) {
         this.windowManager = windowManager;
         this.globalInputManager = GlobalInputManager.getInstance();
+        this.windowManager.registerWindowAttacher((window: WindowContainer) => this.attachToWindow(window));
     }
     
-    public attachToWindow(window: Window): void {
+    public attachToWindow(window: WindowContainer): void {
+        if (this.attachedWindowIds.has(window.getId())) {
+            return;
+        }
+        this.attachedWindowIds.add(window.getId());
         const inputManager = window.getInputManager();
         const element = window.getElement();
         
@@ -43,7 +48,7 @@ export class WindowResizeHandler {
         });
     }
     
-    private startResize(window: Window, handle: string, event: InputEvent): void {
+    private startResize(window: WindowContainer, handle: string, event: InputEvent): void {
         this.resizingWindow = window;
         this.resizeHandle = handle as any;
         this.isResizing = true;

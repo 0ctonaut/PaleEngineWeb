@@ -1,135 +1,222 @@
-import { Window } from './window';
-import { Panel } from './panel';
-import { Viewport } from './viewport';
+import { Window, WindowContainer } from './window';
 
-export class WindowManager {
+export interface WindowMovePayload {
+    tabId: string;
+    groupId: string;
+    containerId: string;
+    width: number;
+    height: number;
+}
+
+export class 
+WindowManager {
     private workspaceElement!: HTMLElement;
-    private windows: Window[] = [];
-    private focusedWindow: Window | null = null;
+    private containers: WindowContainer[] = [];
+    private containerMap: Map<string, WindowContainer> = new Map();
+    private containerAttachers: Set<(container: WindowContainer) => void> = new Set();
+    private focusedContainer: WindowContainer | null = null;
     private baseZIndex: number = 1;
     private toolbarHeight: number = 40; // toolbar 高度
-    
+
     constructor(container: HTMLElement) {
         this.createWorkspace(container);
         this.setupFocusManagement();
     }
-    
+
     private createWorkspace(container: HTMLElement): void {
         this.workspaceElement = document.createElement('div');
         this.workspaceElement.className = 'window-workspace';
         container.appendChild(this.workspaceElement);
     }
-    
+
     private setupFocusManagement(): void {
-        // 点击 workspace 空白处取消聚焦
-        this.workspaceElement.addEventListener('mousedown', (e) => {
-            if (e.target === this.workspaceElement) {
-                this.setFocusedWindow(null);
+        this.workspaceElement.addEventListener('mousedown', (event) => {
+            if (event.target === this.workspaceElement) {
+                this.setFocusedContainer(null);
             }
         });
     }
-    
-    public addWindow(window: Window): void {
-        this.windows.push(window);
-        this.workspaceElement.appendChild(window.getElement());
-        // 设置初始 z-index
-        this.updateWindowZIndex(window);
+
+    public registerWindowAttacher(attacher: (container: WindowContainer) => void): void {
+        this.containerAttachers.add(attacher);
+        this.containers.forEach(attacher);
     }
-    
-    public setFocusedWindow(window: Window | null): void {
-        if (this.focusedWindow === window) return;
-        
-        // 移除之前的聚焦状态
-        if (this.focusedWindow) {
-            this.focusedWindow.getElement().classList.remove('window--active');
+
+    public addWindow(window: Window): WindowContainer {
+        const container = new WindowContainer(window);
+        container.setWindowManager(this);
+        this.containers.push(container);
+        this.containerMap.set(container.getId(), container);
+        this.workspaceElement.appendChild(container.getElement());
+        this.updateContainerZIndex(container);
+        this.containerAttachers.forEach(attacher => attacher(container));
+        return container;
+    }
+
+    public setFocusedContainer(container: WindowContainer | null): void {
+        if (this.focusedContainer === container) {
+            return;
         }
-        
-        this.focusedWindow = window;
-        
-        // 设置新的聚焦状态
-        if (window) {
-            window.getElement().classList.add('window--active');
-            this.bringToFront(window);
+
+        if (this.focusedContainer) {
+            this.focusedContainer.getElement().classList.remove('window--active');
+        }
+
+        this.focusedContainer = container;
+
+        if (container) {
+            container.getElement().classList.add('window--active');
+            this.bringToFront(container);
         }
     }
-    
-    public getFocusedWindow(): Window | null {
-        return this.focusedWindow;
+
+    public setFocusedWindow(container: WindowContainer | null): void {
+        this.setFocusedContainer(container);
     }
-    
-    private bringToFront(window: Window): void {
-        // 将所有窗口的 z-index 重置为基础值
-        this.windows.forEach(w => {
-            if (w !== window) {
-                w.getElement().style.zIndex = `${this.baseZIndex}`;
+
+    public getFocusedContainer(): WindowContainer | null {
+        return this.focusedContainer;
+    }
+
+    private bringToFront(container: WindowContainer): void {
+        this.containers.forEach(c => {
+            if (c !== container) {
+                c.getElement().style.zIndex = `${this.baseZIndex}`;
             }
         });
-        
-        // 将被聚焦的窗口置于最前
-        window.getElement().style.zIndex = `${this.baseZIndex + 1000}`;
+        container.getElement().style.zIndex = `${this.baseZIndex + 1000}`;
     }
-    
-    private updateWindowZIndex(window: Window): void {
-        if (window === this.focusedWindow) {
-            this.bringToFront(window);
+
+    private updateContainerZIndex(container: WindowContainer): void {
+        if (container === this.focusedContainer) {
+            this.bringToFront(container);
         } else {
-            window.getElement().style.zIndex = `${this.baseZIndex}`;
+            container.getElement().style.zIndex = `${this.baseZIndex}`;
         }
     }
-    
+
     public getWorkspaceBounds(): { left: number; top: number; right: number; bottom: number; width: number; height: number } {
         const rect = this.workspaceElement.getBoundingClientRect();
+        const toolbarHeight = this.getToolbarHeight();
+        const topOverlap = Math.max(0, toolbarHeight - rect.top);
+        const effectiveHeight = Math.max(0, rect.height - topOverlap);
+
         return {
             left: 0,
-            top: 0,
+            top: topOverlap,
             right: rect.width,
-            bottom: rect.height,
+            bottom: topOverlap + effectiveHeight,
             width: rect.width,
-            height: rect.height
+            height: effectiveHeight
         };
     }
-    
+
     public getToolbarHeight(): number {
         return this.toolbarHeight;
     }
-    
-    public removeWindow(window: Window): void {
-        const index = this.windows.indexOf(window);
+
+    public removeContainer(container: WindowContainer): void {
+        const index = this.containers.indexOf(container);
         if (index !== -1) {
-            this.windows.splice(index, 1);
-            if (window.getElement().parentNode === this.workspaceElement) {
-                this.workspaceElement.removeChild(window.getElement());
-            }
-            
-            // 如果移除的是聚焦窗口，取消聚焦
-            if (this.focusedWindow === window) {
-                this.focusedWindow = null;
-            }
+            this.containers.splice(index, 1);
         }
+        this.containerMap.delete(container.getId());
+        if (container.getElement().parentNode === this.workspaceElement) {
+            this.workspaceElement.removeChild(container.getElement());
+        }
+        if (this.focusedContainer === container) {
+            this.focusedContainer = null;
+        }
+        container.dispose();
     }
-    
-    public getWindows(): Window[] {
-        return [...this.windows];
+
+    public moveWindowBetweenContainers(
+        payload: WindowMovePayload,
+        targetContainer: WindowContainer,
+        targetGroupId: string,
+        index: number
+    ): void {
+        const sourceContainer = this.containerMap.get(payload.containerId);
+        if (!sourceContainer) {
+            return;
+        }
+        const detachResult = sourceContainer.detachTab(payload.tabId);
+        if (!detachResult) {
+            return;
+        }
+        sourceContainer.markExternalTabDropHandled(payload.tabId);
+        targetContainer.insertDetachedTab(detachResult.window, targetGroupId, index);
+        if (detachResult.containerEmpty) {
+            this.removeContainer(sourceContainer);
+        }
+        this.setFocusedContainer(targetContainer);
     }
-    
+
+    public spawnContainerFromDetachedWindow(
+        window: Window,
+        clientPos: { x: number; y: number },
+        bounds: { width: number; height: number }
+    ): WindowContainer {
+        const container = this.addWindow(window);
+
+        const workspaceRect = this.workspaceElement.getBoundingClientRect();
+        const maxX = Math.max(0, workspaceRect.width - bounds.width);
+        const maxY = Math.max(0, workspaceRect.height - bounds.height);
+        const x = Math.min(Math.max(clientPos.x - workspaceRect.left - bounds.width / 2, 0), maxX);
+        const y = Math.min(Math.max(clientPos.y - workspaceRect.top - bounds.height / 2, 0), maxY);
+        container.setPosition(x, y);
+        container.setSize(bounds.width, bounds.height);
+        this.setFocusedContainer(container);
+        return container;
+    }
+
+    public getContainers(): WindowContainer[] {
+        return [...this.containers];
+    }
+
+    public getWindows(): WindowContainer[] {
+        return this.getContainers();
+    }
+
+    public removeWindow(container: WindowContainer): void {
+        this.removeContainer(container);
+    }
+
+    public moveTabBetweenWindows(
+        payload: WindowMovePayload,
+        targetContainer: WindowContainer,
+        targetGroupId: string,
+        index: number
+    ): void {
+        this.moveWindowBetweenContainers(payload, targetContainer, targetGroupId, index);
+    }
+
+    public spawnWindowFromDetachedTab(
+        window: Window,
+        clientPos: { x: number; y: number },
+        bounds: { width: number; height: number }
+    ): WindowContainer {
+        return this.spawnContainerFromDetachedWindow(window, clientPos, bounds);
+    }
+
+    public createWindow(window: Window): WindowContainer {
+        return this.addWindow(window);
+    }
+
     public getWorkspaceElement(): HTMLElement {
         return this.workspaceElement;
     }
-    
-    public createWindow(title: string, content: Panel | Viewport): Window {
-        const window = new Window(title, content);
-        window.setWindowManager(this);
-        this.addWindow(window);
-        return window;
-    }
-    
+
     public dispose(): void {
-        this.windows.forEach(window => window.dispose());
-        this.windows = [];
-        
+        this.containers.forEach(container => container.dispose());
+        this.containers = [];
+
         if (this.workspaceElement.parentNode) {
             this.workspaceElement.parentNode.removeChild(this.workspaceElement);
         }
+        this.containerMap.clear();
+        this.containerAttachers.clear();
+        this.focusedContainer = null;
     }
 }
 

@@ -1,5 +1,5 @@
-import { Window } from '../window/window';
-import { InputEvent } from '../../../engine/input';
+import { WindowContainer } from '../window';
+import { InputEvent } from '../../../engine';
 import { ContextMenu, ContextMenuItem } from '../context-menu';
 
 export class WindowContextMenu {
@@ -11,17 +11,20 @@ export class WindowContextMenu {
         });
     }
     
-    public attachToWindow(window: Window, onClose?: () => void): void {
+    public attachToWindow(window: WindowContainer, onClose?: () => void): void {
         const inputManager = window.getInputManager();
-        const titleTab = window.getElement().querySelector('.window-title-tab') as HTMLElement;
-        
-        if (!titleTab) return;
+        const getActiveTab = (): HTMLElement | null =>
+            window.getElement().querySelector('.window-tab.active') as HTMLElement | null;
 
         this.contextMenu.attach(inputManager, (event: InputEvent) => {
             if (window.getContentType() !== 'single') {
                 return null;
             }
-            if (!event.target || !titleTab.contains(event.target as Node)) {
+            const activeTab = getActiveTab();
+            if (!activeTab) {
+                return null;
+            }
+            if (!event.target || !activeTab.contains(event.target as Node)) {
                 return null;
             }
 

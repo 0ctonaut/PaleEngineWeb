@@ -1,4 +1,4 @@
-import { Panel } from './window/panel';
+import { Panel } from './window';
 import { LineChart, LineChartData } from './chart';
 import { PerformanceMonitor } from '../../engine/profiler';
 
@@ -11,7 +11,7 @@ export class ProfilerPanel extends Panel {
     private updateId: number | null = null;
     
     constructor(performanceMonitor: PerformanceMonitor) {
-        super();
+        super('Profiler');
         this.performanceMonitor = performanceMonitor;
         this.renderContent();
         this.isUpdating = true;
