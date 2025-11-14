@@ -1,4 +1,4 @@
-import { Panel } from './window';
+import { Panel } from '../window/window';
 import { World, WorldEventMap } from '../../engine';
 import { Object3D, Scene } from 'three/webgpu';
 import { Layers, SelectionCategory } from '@paleengine/core';
@@ -18,12 +18,13 @@ export class InspectorPanel extends Panel {
     private currentObject: Object3D | null = null;
     private transformSection!: HTMLElement;
     private transformContent!: HTMLElement;
-    private readonly transformInputs: Record<TransformType, Record<Axis, HTMLInputElement>> = {
+    private transformInputs: Record<TransformType, Record<Axis, HTMLInputElement>> = {
         position: { x: null!, y: null!, z: null! },
         rotation: { x: null!, y: null!, z: null! },
         scale: { x: null!, y: null!, z: null! }
     };
     private transformExpanded: boolean = true;
+    private isMounted: boolean = false;
 
     private readonly handleSelectionChange = (event: WorldEventMap['selectionchange']) => {
         this.refreshUI(event.selected ?? null);
@@ -47,16 +48,41 @@ export class InspectorPanel extends Panel {
 
     public constructor(world: World) {
         super('Inspector');
+        this.setDefaultFloatingSize({ width: 360, height: 520 });
         this.world = world;
+    }
 
+    protected override onMount(_container: HTMLElement): void {
+        if (this.isMounted) {
+            return;
+        }
+        this.isMounted = true;
         this.renderContent();
-        this.registerEvents();
+        this.attachWorldEvents();
         this.refreshUI(this.world.getSelectedObject());
+    }
+
+    protected override onUnmount(): void {
+        if (!this.isMounted) {
+            return;
+        }
+        this.isMounted = false;
+        this.detachWorldEvents();
+        const element = this.getElement();
+        element.classList.remove('inspector-panel');
+        element.innerHTML = '';
     }
 
     private renderContent(): void {
         const element = this.getElement();
         element.classList.add('inspector-panel');
+        element.innerHTML = '';
+
+        this.transformInputs = {
+            position: { x: null!, y: null!, z: null! },
+            rotation: { x: null!, y: null!, z: null! },
+            scale: { x: null!, y: null!, z: null! }
+        };
 
         this.panelContainer = document.createElement('div');
         this.panelContainer.className = 'inspector-panel__content';
@@ -118,9 +144,14 @@ export class InspectorPanel extends Panel {
         this.setControlsEnabled(false);
     }
 
-    private registerEvents(): void {
+    private attachWorldEvents(): void {
         this.world.on('selectionchange', this.handleSelectionChange);
         this.world.on('hierarchychange', this.handleHierarchyChange);
+    }
+
+    private detachWorldEvents(): void {
+        this.world.off('selectionchange', this.handleSelectionChange);
+        this.world.off('hierarchychange', this.handleHierarchyChange);
     }
 
     private refreshUI(object: Object3D | null): void {
@@ -134,6 +165,9 @@ export class InspectorPanel extends Panel {
     }
 
     private populateControls(object: Object3D | null): void {
+        if (!this.nameInput || !this.layerSelect || !this.enableCheckbox) {
+            return;
+        }
         if (!object) {
             this.nameInput.value = '';
             this.layerSelect.value = '';
@@ -149,7 +183,7 @@ export class InspectorPanel extends Panel {
     }
 
     private commitNameChange(): void {
-        if (!this.currentObject) {
+        if (!this.currentObject || !this.nameInput) {
             return;
         }
 
@@ -170,7 +204,7 @@ export class InspectorPanel extends Panel {
     }
 
     private commitLayerChange(): void {
-        if (!this.currentObject) {
+        if (!this.currentObject || !this.layerSelect) {
             return;
         }
 
@@ -183,6 +217,9 @@ export class InspectorPanel extends Panel {
     }
 
     private populateLayerOptions(): void {
+        if (!this.layerSelect) {
+            return;
+        }
         const entries: LayerEntry[] = Object.entries(Layers);
         this.layerSelect.innerHTML = '';
 
@@ -195,6 +232,9 @@ export class InspectorPanel extends Panel {
     }
 
     private setControlsEnabled(enabled: boolean): void {
+        if (!this.nameInput || !this.layerSelect || !this.enableCheckbox) {
+            return;
+        }
         this.nameInput.disabled = !enabled;
         this.layerSelect.disabled = !enabled;
         // Intentionally keep checkbox disabled (placeholder)
@@ -221,8 +261,7 @@ export class InspectorPanel extends Panel {
     }
 
     public dispose(): void {
-        this.world.off('selectionchange', this.handleSelectionChange);
-        this.world.off('hierarchychange', this.handleHierarchyChange);
+        this.detachWorldEvents();
         super.dispose();
     }
 
@@ -296,6 +335,9 @@ export class InspectorPanel extends Panel {
     }
 
     private toggleTransformSection(): void {
+        if (!this.transformSection) {
+            return;
+        }
         this.transformExpanded = !this.transformExpanded;
         this.transformSection.classList.toggle('is-collapsed', !this.transformExpanded);
     }
@@ -303,10 +345,15 @@ export class InspectorPanel extends Panel {
     private setTransformEnabled(enabled: boolean): void {
         (Object.keys(this.transformInputs) as TransformType[]).forEach(type => {
             (Object.keys(this.transformInputs[type]) as Axis[]).forEach(axis => {
-                this.transformInputs[type][axis].disabled = !enabled;
+                const input = this.transformInputs[type][axis];
+                if (input) {
+                    input.disabled = !enabled;
+                }
             });
         });
-        this.transformSection.classList.toggle('inspector-panel__section--disabled', !enabled);
+        if (this.transformSection) {
+            this.transformSection.classList.toggle('inspector-panel__section--disabled', !enabled);
+        }
     }
 
     private populateTransformControls(object: Object3D | null): void {
@@ -321,9 +368,16 @@ export class InspectorPanel extends Panel {
     }
 
     private setTransformRowValues(type: TransformType, x: number, y: number, z: number): void {
-        this.transformInputs[type].x.value = this.formatNumber(x);
-        this.transformInputs[type].y.value = this.formatNumber(y);
-        this.transformInputs[type].z.value = this.formatNumber(z);
+        const inputs = this.transformInputs[type];
+        if (inputs.x) {
+            inputs.x.value = this.formatNumber(x);
+        }
+        if (inputs.y) {
+            inputs.y.value = this.formatNumber(y);
+        }
+        if (inputs.z) {
+            inputs.z.value = this.formatNumber(z);
+        }
     }
 
     private commitTransformValue(type: TransformType, axis: Axis): void {
@@ -332,6 +386,9 @@ export class InspectorPanel extends Panel {
         }
 
         const input = this.transformInputs[type][axis];
+        if (!input) {
+            return;
+        }
         const parsed = Number.parseFloat(input.value);
         if (!Number.isFinite(parsed)) {
             this.populateTransformControls(this.currentObject);

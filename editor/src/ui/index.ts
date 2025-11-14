@@ -15,9 +15,21 @@ export type { ParameterConfig } from './components/parameter-control';
 export type { LineChartData, LineChartOptions } from './components/chart';
 
 // Window system
-export { Window, WindowContainer, WindowManager, Panel, Viewport } from './components/window';
-export type { WindowContainerContentType } from './components/window';
-export { Tab, TabGroup, createLeafNode, createSplitNode } from './components/window/window-layout';
-export type { LayoutNode, SplitDirection } from './components/window/window-layout';
-export { WindowDragHandler, WindowResizeHandler, WindowContextMenu } from './components/interaction';
-export { ContextMenu } from './components/context-menu';
+export {
+    BaseWindow,
+    WindowManager,
+    WindowTreeStore,
+    WindowDomRenderer,
+    Panel,
+    Viewport,
+    WindowContextMenu
+} from './window/window';
+export type {
+    WindowTreeNode,
+    SimpleWindowNode,
+    TabContainerNode,
+    SplitContainerNode,
+    SplitDirection,
+    WindowTreeEvent
+} from './window/window';
+// export { ContextMenu } from './components/context-menu';

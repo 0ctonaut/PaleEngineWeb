@@ -1,3 +1,7 @@
+ :root {
+   --pe-toolbar-height: 40px;
+ }
+
 body {
   /* remove margins and scroll bars */
   margin: 0;
@@ -25,8 +29,8 @@ h1 {
   /* tell our scene container to take up the full page */
   position: absolute;
   width: 100%;
-  height: 100%;
-  top: 40px; /* 为顶栏留出空间 */
+    height: calc(100% - var(--pe-toolbar-height));
+    top: var(--pe-toolbar-height); /* 为顶栏留出空间 */
 
   /*
     Set the container's background color to the same as the scene's

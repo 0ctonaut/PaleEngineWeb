@@ -36,7 +36,7 @@ function main(): void {
         }
         
         worldUI = createWorldUI({ sceneContainer: container, toolbarContainer });
-        const { viewportElement, viewportWindow, windowManager } = worldUI;
+        const { viewportElement, windowManager } = worldUI;
 
         world = new World(viewportElement);
         (window as any).world = world;
@@ -51,7 +51,7 @@ function main(): void {
         // --- Render Loop ---
         let lastFrameTime = performance.now();
         const renderLoop = async (): Promise<void> => {
-            if (!world || !viewportWindow || !windowManager) {
+            if (!world || !windowManager) {
                 return;
             }
             
@@ -61,9 +61,11 @@ function main(): void {
             
             world.update(deltaTime);
             
-            const bounds = viewportWindow.getBounds();
-            const gizmoSize = Math.floor(0.2 * Math.min(bounds.width, bounds.height));
-            await world.render(bounds.width, bounds.height, gizmoSize);
+            const bounds = viewportElement.getBoundingClientRect();
+            const width = Math.max(bounds.width, 1);
+            const height = Math.max(bounds.height, 1);
+            const gizmoSize = Math.floor(0.2 * Math.min(width, height));
+            await world.render(width, height, gizmoSize);
             
             requestAnimationFrame(renderLoop);
         };
@@ -79,8 +81,6 @@ function main(): void {
                 resizer.updateSize();
             }
         });
-        resizeObserver.observe(viewportWindow.getElement());
-        // 同时监听 Viewport 元素本身的大小变化
         resizeObserver.observe(viewportElement);
         
         console.log('PaleEngine Editor initialized successfully');

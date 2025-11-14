@@ -1,17 +1,19 @@
-import { Window } from './window';
+import { BaseWindow } from './base-window';
 
-export class Viewport extends Window {
+export class Viewport extends BaseWindow {
     private canvas: HTMLCanvasElement | null = null;
 
-    constructor(title: string = 'Viewport', canvas?: HTMLCanvasElement) {
+    public constructor(title: string = 'Viewport', canvas?: HTMLCanvasElement) {
         super(title);
+        this.setDefaultFloatingSize({ width: 640, height: 360 });
         if (canvas) {
             this.setCanvas(canvas);
         }
     }
 
-    protected buildContent(container: HTMLElement): void {
-        container.classList.add('window-viewport');
+    protected override onAttach(_container: HTMLElement): void {
+        const element = this.getElement();
+        element.classList.add('pale-window-viewport');
     }
 
     public setCanvas(canvas: HTMLCanvasElement): void {

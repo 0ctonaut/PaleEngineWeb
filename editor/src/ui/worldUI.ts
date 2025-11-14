@@ -1,19 +1,16 @@
 import { World } from '../engine';
 import {
     Toolbar,
-    WindowContextMenu,
-    WindowDragHandler,
     WindowManager,
-    WindowResizeHandler,
     Viewport,
     ProfilerPanel,
     HierarchyPanel,
     InspectorPanel,
+    WindowContextMenu
 } from '.';
 
 export interface WorldUI {
     windowManager: WindowManager;
-    viewportWindow: ReturnType<WindowManager['createWindow']>;
     viewport: Viewport;
     viewportElement: HTMLElement;
     attachWorld: (world: World) => void;
@@ -29,61 +26,25 @@ interface Containers {
 export function createWorldUI(containers: Containers): WorldUI {
     const { sceneContainer, toolbarContainer } = containers;
 
-    const windowManager = new WindowManager(sceneContainer);
-
+    const windowManager = new WindowManager({ host: sceneContainer });
     const viewport = new Viewport();
-    const viewportWindow = windowManager.createWindow(viewport);
-    viewportWindow.setPosition(100, 100);
-    viewportWindow.setSize(800, 600);
-
-    const viewportContainerElement = viewportWindow.getElement();
-    const viewportContentElement = viewportContainerElement.querySelector('.window-viewport') as HTMLElement | null;
-    const viewportElement = viewportContentElement ?? viewportContainerElement;
-    viewportElement.style.width = '800px';
-    viewportElement.style.height = '600px';
+    const viewportNode = windowManager.createInitialWindow(viewport);
+    const viewportElement = viewport.getElement();
 
     let world: World | null = null;
     let toolbar: Toolbar | null = null;
-    let dragHandler: WindowDragHandler | null = null;
-    let resizeHandler: WindowResizeHandler | null = null;
-    let contextMenu: WindowContextMenu | null = null;
-
-    const createPanels = () => {
-        if (!world) {
-            return;
-        }
-
-        const hierarchyPanel = new HierarchyPanel(world);
-        const hierarchyWindow = windowManager.createWindow(hierarchyPanel);
-        hierarchyWindow.setPosition(20, 100);
-        hierarchyWindow.setSize(280, 500);
-        hierarchyWindow.getElement().classList.add('window--hierarchy');
-
-        const inspectorPanel = new InspectorPanel(world);
-        const inspectorWindow = windowManager.createWindow(inspectorPanel);
-        inspectorWindow.setPosition(320, 100);
-        inspectorWindow.setSize(300, 400);
-        inspectorWindow.getElement().classList.add('window--inspector');
-
-        const profilerPanel = new ProfilerPanel(world.getPerformanceMonitor());
-        const profilerWindow = windowManager.createWindow(profilerPanel);
-        profilerWindow.setPosition(920, 100);
-        profilerWindow.setSize(400, 400);
+    let panelsInitialized = false;
+    const contextMenu = new WindowContextMenu(sceneContainer, windowManager);
+    const handleContextMenu = (event: MouseEvent) => {
+        event.preventDefault();
+    };
+    const handleSelectStart = (event: Event) => {
+        event.preventDefault();
     };
 
-    const attachWindowHandlers = () => {
-        if (!dragHandler || !resizeHandler || !contextMenu) {
-            return;
-        }
-
-        windowManager.getWindows().forEach((windowContainer: ReturnType<WindowManager['createWindow']>) => {
-            dragHandler!.attachToWindow(windowContainer);
-            resizeHandler!.attachToWindow(windowContainer);
-            contextMenu!.attachToWindow(windowContainer, () => {
-                windowManager.removeWindow(windowContainer);
-            });
-        });
-    };
+    // 禁用浏览器的选中文字和右键菜单
+    sceneContainer.addEventListener('contextmenu', handleContextMenu);
+    sceneContainer.addEventListener('selectstart', handleSelectStart);
 
     const attachWorld = (worldInstance: World) => {
         world = worldInstance;
@@ -91,22 +52,30 @@ export function createWorldUI(containers: Containers): WorldUI {
         const canvas = world.getRenderer().domElement;
         viewport.setCanvas(canvas);
 
-        createPanels();
+        if (!panelsInitialized) {
+            const hierarchyPanel = new HierarchyPanel(world);
+            const inspectorPanel = new InspectorPanel(world);
+            const profilerPanel = new ProfilerPanel(world.getPerformanceMonitor());
+
+            const hierarchyNode = windowManager.divideWindowWith(
+                viewportNode.id,
+                'horizontal',
+                hierarchyPanel,
+                'before'
+            );
+            windowManager.stackWithSimple(hierarchyNode.id, inspectorPanel);
+            windowManager.stackWithSimple(hierarchyNode.id, profilerPanel);
+            windowManager.activate(hierarchyNode.id);
+            panelsInitialized = true;
+        }
 
         toolbar = new Toolbar(world.getCameraController());
         toolbarContainer.appendChild(toolbar.getElement());
-
-        dragHandler = new WindowDragHandler(windowManager);
-        resizeHandler = new WindowResizeHandler(windowManager);
-        contextMenu = new WindowContextMenu();
-
-        attachWindowHandlers();
+        updateViewportSize();
     };
 
     const updateViewportSize = () => {
-        const bounds = viewportWindow.getBounds();
-        viewportElement.style.width = `${bounds.width}px`;
-        viewportElement.style.height = `${bounds.height}px`;
+        const bounds = viewportElement.getBoundingClientRect();
 
         if (!world) {
             return;
@@ -128,17 +97,7 @@ export function createWorldUI(containers: Containers): WorldUI {
     };
 
     const dispose = () => {
-        if (contextMenu) {
-            contextMenu.dispose();
-            contextMenu = null;
-        }
-
-        if (dragHandler) {
-            dragHandler.dispose();
-            dragHandler = null;
-        }
-
-        resizeHandler = null;
+        contextMenu.dispose();
 
         if (toolbar) {
             const toolbarElement = toolbar.getElement();
@@ -149,11 +108,12 @@ export function createWorldUI(containers: Containers): WorldUI {
         }
 
         windowManager.dispose();
+        sceneContainer.removeEventListener('contextmenu', handleContextMenu);
+        sceneContainer.removeEventListener('selectstart', handleSelectStart);
     };
 
     return {
         windowManager,
-        viewportWindow,
         viewport,
         viewportElement,
         attachWorld,

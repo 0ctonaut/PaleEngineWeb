@@ -1,27 +1,52 @@
-import { Panel } from './window';
+import { Panel } from '../window/window';
 import { LineChart, LineChartData } from './chart';
 import { PerformanceMonitor } from '../../engine/profiler';
 
 export class ProfilerPanel extends Panel {
     private performanceMonitor: PerformanceMonitor;
-    private fpsChart!: LineChart;
-    private memoryChart!: LineChart;
-    private statsContainer!: HTMLElement;
+    private fpsChart: LineChart | null = null;
+    private memoryChart: LineChart | null = null;
+    private statsContainer: HTMLElement | null = null;
     private isUpdating: boolean = false;
     private updateId: number | null = null;
+    private isMounted: boolean = false;
     
     constructor(performanceMonitor: PerformanceMonitor) {
         super('Profiler');
+        this.setDefaultFloatingSize({ width: 440, height: 360 });
         this.performanceMonitor = performanceMonitor;
+    }
+    
+    protected override onMount(_container: HTMLElement): void {
+        if (this.isMounted) {
+            return;
+        }
+        this.isMounted = true;
         this.renderContent();
         this.isUpdating = true;
         this.startUpdate();
     }
-    
+
+    protected override onUnmount(): void {
+        if (!this.isMounted) {
+            return;
+        }
+        this.isMounted = false;
+        this.stopUpdate();
+        this.isUpdating = false;
+        this.disposeCharts();
+        this.statsContainer = null;
+        const element = this.getElement();
+        element.classList.remove('profiler-panel-content');
+        element.innerHTML = '';
+    }
+
     private renderContent(): void {
         const content = this.getElement();
-        content.className = 'profiler-panel-content';
+        content.classList.add('profiler-panel-content');
         content.innerHTML = '';
+        this.disposeCharts();
+        this.statsContainer = null;
         
         const fpsContainer = this.createChartContainer('FPS');
         const fpsCanvasContainer = document.createElement('div');
@@ -92,6 +117,9 @@ export class ProfilerPanel extends Panel {
     }
     
     private updateCharts(): void {
+        if (!this.fpsChart) {
+            return;
+        }
         const data = this.performanceMonitor.getData();
         const stats = this.performanceMonitor.getStatistics();
         
@@ -110,7 +138,7 @@ export class ProfilerPanel extends Panel {
         this.fpsChart.updateData(fpsData);
         this.fpsChart.autoFitYRange(0.1);
         
-        if (memoryData.length > 0) {
+        if (memoryData.length > 0 && this.memoryChart) {
             this.memoryChart.updateData(memoryData);
             this.memoryChart.autoFitYRange(0.1);
         }
@@ -119,7 +147,11 @@ export class ProfilerPanel extends Panel {
     }
     
     private updateStats(stats: ReturnType<typeof this.performanceMonitor.getStatistics>): void {
-        this.statsContainer.innerHTML = '';
+        const container = this.statsContainer;
+        if (!container) {
+            return;
+        }
+        container.innerHTML = '';
         
         if (!stats.current) {
             return;
@@ -158,7 +190,7 @@ export class ProfilerPanel extends Panel {
                 rowElement.appendChild(cellElement);
             });
             
-            this.statsContainer.appendChild(rowElement);
+            container.appendChild(rowElement);
         });
     }
     
@@ -173,7 +205,9 @@ export class ProfilerPanel extends Panel {
     }
     
     private startUpdate(): void {
-        if (!this.isUpdating || this.updateId !== null) return;
+        if (!this.isUpdating || this.updateId !== null || !this.isMounted) {
+            return;
+        }
         
         const update = () => {
             this.updateCharts();
@@ -192,18 +226,22 @@ export class ProfilerPanel extends Panel {
             this.updateId = null;
         }
     }
+
+    private disposeCharts(): void {
+        if (this.fpsChart) {
+            this.fpsChart.dispose();
+            this.fpsChart = null;
+        }
+        if (this.memoryChart) {
+            this.memoryChart.dispose();
+            this.memoryChart = null;
+        }
+    }
     
     public dispose(): void {
         this.stopUpdate();
-        
-        if (this.fpsChart) {
-            this.fpsChart.dispose();
-        }
-        
-        if (this.memoryChart) {
-            this.memoryChart.dispose();
-        }
-        
+        this.disposeCharts();
+        this.statsContainer = null;
         super.dispose();
     }
 }

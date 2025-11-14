@@ -1,4 +1,4 @@
-import { Panel } from './window';
+import { Panel } from '../window/window';
 import { World, WorldEventMap } from '../../engine';
 import { Object3D, Scene } from 'three/webgpu';
 import { SelectionCategory } from '@paleengine/core';
@@ -12,7 +12,7 @@ interface NodeEntry {
 
 export class HierarchyPanel extends Panel {
     private readonly world: World;
-    private treeContainer!: HTMLElement;
+    private treeContainer: HTMLElement | null = null;
     private searchInput: HTMLInputElement | null = null;
     private searchClearButton: HTMLButtonElement | null = null;
     private searchQuery: string = '';
@@ -28,6 +28,7 @@ export class HierarchyPanel extends Panel {
     private renamingNodeId: string | null = null;
     private renamingObject: Object3D | null = null;
     private renameInput: HTMLInputElement | null = null;
+    private isMounted: boolean = false;
     private readonly handlePanelMouseDown = (event: InputEvent) => {
         const header = (event.target as HTMLElement | null)?.closest('.hierarchy-node__header');
         if (!header) {
@@ -88,7 +89,15 @@ export class HierarchyPanel extends Panel {
 
     public constructor(world: World) {
         super('Hierarchy');
+        this.setDefaultFloatingSize({ width: 320, height: 480 });
         this.world = world;
+    }
+
+    protected override onMount(_container: HTMLElement): void {
+        if (this.isMounted) {
+            return;
+        }
+        this.isMounted = true;
         this.renderContent();
         this.setupInteraction();
         this.world.on('hierarchychange', this.handleHierarchyChange);
@@ -97,9 +106,38 @@ export class HierarchyPanel extends Panel {
         this.updateSelectionHighlight(this.world.getSelectedObject());
     }
 
+    protected override onUnmount(): void {
+        if (!this.isMounted) {
+            return;
+        }
+        this.isMounted = false;
+        this.world.off('hierarchychange', this.handleHierarchyChange);
+        this.world.off('selectionchange', this.handleSelectionChange);
+        this.teardownInteraction();
+        this.nodeHeaders.clear();
+        this.nodeElements.clear();
+        this.nodeDepth.clear();
+        this.expandState.clear();
+        this.renamingNodeId = null;
+        this.renamingObject = null;
+        this.renameInput = null;
+        if (this.refreshRafId !== null) {
+            cancelAnimationFrame(this.refreshRafId);
+            this.refreshRafId = null;
+        }
+        this.refreshScheduled = false;
+        this.treeContainer = null;
+        this.searchInput = null;
+        this.searchClearButton = null;
+        const element = this.getElement();
+        element.classList.remove('hierarchy-panel');
+        element.innerHTML = '';
+    }
+
     private renderContent(): void {
         const content = this.getElement();
         content.classList.add('hierarchy-panel');
+        content.innerHTML = '';
 
         const searchContainer = document.createElement('div');
         searchContainer.className = 'hierarchy-search';
@@ -141,12 +179,17 @@ export class HierarchyPanel extends Panel {
         content.appendChild(searchContainer);
         this.refreshSearchUI();
 
-        this.treeContainer = document.createElement('div');
-        this.treeContainer.className = 'hierarchy-tree';
-        content.appendChild(this.treeContainer);
+        const treeContainer = document.createElement('div');
+        treeContainer.className = 'hierarchy-tree';
+        content.appendChild(treeContainer);
+        this.treeContainer = treeContainer;
     }
 
     private setupInteraction(): void {
+        const treeContainer = this.treeContainer;
+        if (!treeContainer) {
+            return;
+        }
         const context = new InputContext({
             name: 'hierarchy-panel',
             priority: 5
@@ -154,7 +197,7 @@ export class HierarchyPanel extends Panel {
         context.activate();
         this.inputContext = context;
 
-        this.inputManager = new LocalInputManager(this.treeContainer, context);
+        this.inputManager = new LocalInputManager(treeContainer, context);
         this.contextMenu = new ContextMenu({
             extraClasses: ['hierarchy-context-menu']
         });
@@ -163,11 +206,31 @@ export class HierarchyPanel extends Panel {
         this.inputManager.on(EventTypes.MOUSE_DOWN, this.handlePanelMouseDown);
     }
 
+    private teardownInteraction(): void {
+        if (this.contextMenu) {
+            this.contextMenu.dispose();
+            this.contextMenu = null;
+        }
+        if (this.inputManager) {
+            this.inputManager.off(EventTypes.MOUSE_DOWN, this.handlePanelMouseDown);
+            this.inputManager.dispose();
+            this.inputManager = null;
+        }
+        if (this.inputContext) {
+            this.inputContext.dispose();
+            this.inputContext = null;
+        }
+    }
+
     private refreshTree(): void {
+        const treeContainer = this.treeContainer;
+        if (!treeContainer) {
+            return;
+        }
         const scene = this.world.getScene();
         this.ensureRootExpanded(scene);
 
-        this.treeContainer.innerHTML = '';
+        treeContainer.innerHTML = '';
         this.nodeHeaders.clear();
         this.nodeElements.clear();
         this.nodeDepth.clear();
@@ -176,10 +239,10 @@ export class HierarchyPanel extends Panel {
             const matches = this.collectMatchingObjects(scene);
             matches.forEach(match => {
                 const nodeElement = this.createNode(match, 0, { showToggle: false });
-                this.treeContainer.appendChild(nodeElement);
+                treeContainer.appendChild(nodeElement);
             });
         } else {
-            this.buildTreeRecursive(scene, 0, this.treeContainer);
+            this.buildTreeRecursive(scene, 0, treeContainer);
         }
 
         this.refreshSearchUI();
@@ -704,32 +767,11 @@ export class HierarchyPanel extends Panel {
     public dispose(): void {
         this.world.off('hierarchychange', this.handleHierarchyChange);
         this.world.off('selectionchange', this.handleSelectionChange);
-        if (this.contextMenu) {
-            this.contextMenu.dispose();
-            this.contextMenu = null;
-        }
-        if (this.inputManager) {
-            this.inputManager.off(EventTypes.MOUSE_DOWN, this.handlePanelMouseDown);
-            this.inputManager.dispose();
-            this.inputManager = null;
-        }
-        if (this.inputContext) {
-            this.inputContext.dispose();
-            this.inputContext = null;
-        }
-        this.nodeHeaders.clear();
-        this.nodeElements.clear();
-        this.nodeDepth.clear();
-        if (this.refreshRafId !== null) {
-            cancelAnimationFrame(this.refreshRafId);
-            this.refreshRafId = null;
-            this.refreshScheduled = false;
-        }
         super.dispose();
     }
 
     private scheduleRefresh(): void {
-        if (this.refreshScheduled) {
+        if (!this.isMounted || this.refreshScheduled) {
             return;
         }
 
