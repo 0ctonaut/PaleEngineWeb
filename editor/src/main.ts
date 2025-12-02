@@ -35,7 +35,7 @@ function main(): void {
             console.warn('Container has zero dimensions. Scene may not render correctly.');
         }
         
-        worldUI = createWorldUI({ sceneContainer: container, toolbarContainer });
+        worldUI = createWorldUI({ workspaceContainer: container, toolbarContainer });
         const { viewportElement, windowManager } = worldUI;
 
         world = new World(viewportElement);

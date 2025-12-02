@@ -8,7 +8,7 @@ import {
 import { WindowTreeStore } from '../window-tree-store';
 import { DockingInteraction } from './window-interaction-docking';
 import { FloatingInteraction } from './window-interaction-floating';
-import { DragSession, DragType, InteractionHost, WindowInteractionCallbacks } from './window-interaction-shared';
+import { DragSession, InteractionHost, WindowInteractionCallbacks } from './window-interaction-shared';
 
 export class WindowInteractionManager {
     private readonly inputContext: InputContext;
@@ -92,7 +92,8 @@ export class WindowInteractionManager {
     private beginSession(session: DragSession): void {
         this.clearGlobalListeners();
         this.activeSession = session;
-        this.setGlobalDrag(session.type);
+        //this.setGlobalDrag(session.type);
+        this.setGlobalDrag();
     }
 
     private replaceSession(session: DragSession): void {
@@ -111,7 +112,8 @@ export class WindowInteractionManager {
         this.floatingInteraction.beginFloatingDragFromTab(nodeId, event);
     }
 
-    private setGlobalDrag(type: DragType): void {
+    //private setGlobalDrag(type: DragType): void {
+    private setGlobalDrag(): void {
         this.clearGlobalListeners();
         this.disposeGlobalMove = this.globalInput.onGlobalMouseMove(this.handleGlobalMove);
         this.disposeGlobalUp = this.globalInput.onGlobalMouseUp(this.handleGlobalUp);

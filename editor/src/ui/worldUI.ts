@@ -19,12 +19,12 @@ export interface WorldUI {
 }
 
 interface Containers {
-    sceneContainer: HTMLElement;
     toolbarContainer: HTMLElement;
+    workspaceContainer: HTMLElement;
 }
 
 export function createWorldUI(containers: Containers): WorldUI {
-    const { sceneContainer, toolbarContainer } = containers;
+    const { workspaceContainer: sceneContainer, toolbarContainer } = containers;
 
     const windowManager = new WindowManager({ host: sceneContainer });
     const viewport = new Viewport();
@@ -57,15 +57,62 @@ export function createWorldUI(containers: Containers): WorldUI {
             const inspectorPanel = new InspectorPanel(world);
             const profilerPanel = new ProfilerPanel(world.getPerformanceMonitor());
 
-            const hierarchyNode = windowManager.divideWindowWith(
+            // Step 1: Add hierarchyPanel to the left of viewport (horizontal, 'before')
+            // This creates a horizontal SplitContainer as root with [hierarchyPanel, viewport]
+            windowManager.divideWindowWith(
                 viewportNode.id,
                 'horizontal',
                 hierarchyPanel,
                 'before'
             );
-            windowManager.stackWithSimple(hierarchyNode.id, inspectorPanel);
-            windowManager.stackWithSimple(hierarchyNode.id, profilerPanel);
-            windowManager.activate(hierarchyNode.id);
+
+            // Step 2: Add inspectorPanel to the right of viewport (horizontal, 'after')
+            // Since viewport's parent is horizontal SplitContainer with same direction,
+            // this triggers node promotion, adding inspectorPanel to the same horizontal SplitContainer
+            // Result: [hierarchyPanel, viewport, inspectorPanel]
+            windowManager.divideWindowWith(
+                viewportNode.id,
+                'horizontal',
+                inspectorPanel,
+                'after'
+            );
+
+            // Step 3: Add profilerPanel below viewport (vertical, 'after')
+            // Since viewport's parent is horizontal SplitContainer with different direction,
+            // this creates a vertical SplitContainer replacing viewport's TabContainer
+            // Result: horizontal root [hierarchyPanel, vertical SplitContainer, inspectorPanel]
+            //         vertical SplitContainer [viewport, profilerPanel]
+            windowManager.divideWindowWith(
+                viewportNode.id,
+                'vertical',
+                profilerPanel,
+                'after'
+            );
+
+            // Step 4: Set ratios for horizontal root SplitContainer: 1/4, 2/4, 1/4
+            // ratios[0] = 0.25 (first divider at 25%, hierarchyPanel = 25%)
+            // ratios[1] = 0.75 (second divider at 75%, hierarchyPanel + middle = 75%, so middle = 50%, inspectorPanel = 25%)
+            const rootId = windowManager.getRootId();
+            if (rootId) {
+                windowManager.updateSplitRatio(rootId, 0, 0.2);
+                windowManager.updateSplitRatio(rootId, 1, 0.8);
+            }
+
+            // Step 5: Set ratio for vertical SplitContainer (middle): 1/2, 1/2
+            // Find the vertical SplitContainer by getting viewport's parent (TabContainer), then its parent (vertical SplitContainer)
+            const viewportNodeAfterDivide = windowManager.getNode(viewportNode.id);
+            if (viewportNodeAfterDivide && viewportNodeAfterDivide.parentId) {
+                const viewportTabContainer = windowManager.getNode(viewportNodeAfterDivide.parentId);
+                if (viewportTabContainer && viewportTabContainer.parentId) {
+                    const verticalSplitContainer = windowManager.getNode(viewportTabContainer.parentId);
+                    if (verticalSplitContainer && verticalSplitContainer.type === 'split' && verticalSplitContainer.direction === 'vertical') {
+                        // Set ratio to 0.5 (viewport and profilerPanel each 50%)
+                        windowManager.updateSplitRatio(verticalSplitContainer.id, 0, 0.8);
+                    }
+                }
+            }
+
+            windowManager.activate(viewportNode.id);
             panelsInitialized = true;
         }
 

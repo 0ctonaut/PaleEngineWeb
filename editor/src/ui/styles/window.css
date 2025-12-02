@@ -583,6 +583,7 @@
 .pale-window-tabContainer {
   display: flex;
   flex-direction: column;
+  width: 100%;
   height: 100%;
   background: rgba(30, 30, 31, 0.96);
   border-radius: 8px;
@@ -674,6 +675,13 @@
 .pale-window-split__pane {
   display: flex;
   flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pale-window-split__pane > * {
+  width: 100%;
+  height: 100%;
   min-width: 0;
   min-height: 0;
 }

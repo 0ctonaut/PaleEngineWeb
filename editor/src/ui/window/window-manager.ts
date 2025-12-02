@@ -1,7 +1,7 @@
 import { BaseWindow } from './base-window';
 import { WindowDomRenderer } from './window-dom-renderer';
 import { WindowTreeStore } from './window-tree-store';
-import { SimpleWindowNode, SplitDirection } from './types';
+import { SimpleWindowNode, SplitDirection, WindowTreeNode } from './types';
 import { WindowInteractionManager } from './interaction/window-interaction-manager.js';
 
 interface WindowManagerOptions {
@@ -10,7 +10,7 @@ interface WindowManagerOptions {
 
 export class WindowManager {
     private readonly host: HTMLElement;
-    private primaryEntry: {
+    private _primaryEntry: {
         store: WindowTreeStore;
         renderer: WindowDomRenderer;
         interaction: WindowInteractionManager;
@@ -22,8 +22,15 @@ export class WindowManager {
         this.host.classList.add('pale-window-host');
     }
 
+    private get primaryEntry(): NonNullable<typeof this._primaryEntry> {
+        if (!this._primaryEntry) {
+            throw new Error('Window manager not initialized.');
+        }
+        return this._primaryEntry;
+    }
+
     public createInitialWindow(window: BaseWindow, options?: { headless?: boolean }): SimpleWindowNode {
-        if (this.primaryEntry) {
+        if (this._primaryEntry) {
             throw new Error('Initial window already created.');
         }
 
@@ -51,7 +58,7 @@ export class WindowManager {
             }
         });
 
-        this.primaryEntry = { store, renderer, interaction, unsubscribe };
+        this._primaryEntry = { store, renderer, interaction, unsubscribe };
 
         return rootNode;
     }
@@ -63,8 +70,7 @@ export class WindowManager {
         position: 'before' | 'after' = 'after',
         options?: { headless?: boolean }
     ): SimpleWindowNode {
-        const entry = this.ensurePrimaryEntry();
-        return entry.store.divideSimpleNode(targetId, direction, window, position, options);
+        return this.primaryEntry.store.divideSimpleNode(targetId, direction, window, position, options);
     }
 
     public stackWithSimple(
@@ -72,13 +78,23 @@ export class WindowManager {
         window: BaseWindow,
         options?: { headless?: boolean }
     ): SimpleWindowNode {
-        const entry = this.ensurePrimaryEntry();
-        return entry.store.stackWithSimple(targetId, window, options);
+        return this.primaryEntry.store.stackWithSimple(targetId, window, options);
     }
 
     public activate(nodeId: string): void {
-        const entry = this.ensurePrimaryEntry();
-        entry.store.activate(nodeId);
+        this.primaryEntry.store.activate(nodeId);
+    }
+
+    public updateSplitRatio(splitId: string, dividerIndex: number, ratio: number): void {
+        this.primaryEntry.store.updateSplitRatio(splitId, dividerIndex, ratio);
+    }
+
+    public getRootId(): string | null {
+        return this.primaryEntry.store.getRootId();
+    }
+
+    public getNode<T extends WindowTreeNode = WindowTreeNode>(id: string): T | null {
+        return this.primaryEntry.store.getNode<T>(id);
     }
 
     public getWorkspaceElement(): HTMLElement {
@@ -86,20 +102,13 @@ export class WindowManager {
     }
 
     public dispose(): void {
-        if (this.primaryEntry) {
-            this.primaryEntry.unsubscribe?.();
-            this.primaryEntry.renderer.dispose();
-            this.primaryEntry.store.dispose();
-            this.primaryEntry.interaction.dispose();
-            this.primaryEntry = null;
+        if (this._primaryEntry) {
+            this._primaryEntry.unsubscribe?.();
+            this._primaryEntry.renderer.dispose();
+            this._primaryEntry.store.dispose();
+            this._primaryEntry.interaction.dispose();
+            this._primaryEntry = null;
         }
-    }
-
-    private ensurePrimaryEntry(): NonNullable<typeof this.primaryEntry> {
-        if (!this.primaryEntry) {
-            throw new Error('Window manager not initialized.');
-        }
-        return this.primaryEntry;
     }
 }
 

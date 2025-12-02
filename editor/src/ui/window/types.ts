@@ -27,9 +27,8 @@ export interface TabContainerNode extends WindowTreeNodeBase {
 export interface SplitContainerNode extends WindowTreeNodeBase {
     readonly type: 'split';
     direction: SplitDirection;
-    ratio: number;
-    firstChildId: string;
-    secondChildId: string;
+    children: string[];
+    ratios: number[]; // Length is children.length - 1, each value represents cumulative ratio up to that divider
 }
 
 export type WindowTreeNode = SimpleWindowNode | TabContainerNode | SplitContainerNode;

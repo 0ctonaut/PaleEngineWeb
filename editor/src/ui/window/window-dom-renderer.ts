@@ -153,22 +153,42 @@ export class WindowDomRenderer {
         const directionClass = node.direction === 'horizontal' ? '--horizontal' : '--vertical';
         container.classList.add(`pale-window-split${directionClass}`);
 
-        const firstPane = this.createSplitPane(node.firstChildId, node.ratio, true);
-        const secondPane = this.createSplitPane(node.secondChildId, 1 - node.ratio, false);
+        if (node.children.length === 0) {
+            return container;
+        }
 
-        const divider = this.createSplitDivider(node);
-
-        container.appendChild(firstPane);
-        container.appendChild(divider);
-        container.appendChild(secondPane);
+        // Render panes and dividers
+        for (let i = 0; i < node.children.length; i++) {
+            const childId = node.children[i];
+            
+            // Calculate ratio for this pane
+            let ratio: number;
+            if (i === 0) {
+                ratio = node.ratios.length > 0 ? node.ratios[0] : 1;
+            } else if (i === node.children.length - 1) {
+                ratio = node.ratios.length > 0 ? 1 - node.ratios[node.ratios.length - 1] : 1;
+            } else {
+                ratio = node.ratios[i] - node.ratios[i - 1];
+            }
+            
+            const pane = this.createSplitPane(childId, ratio, i);
+            container.appendChild(pane);
+            
+            // Add divider after each pane except the last one
+            if (i < node.children.length - 1) {
+                const divider = this.createSplitDivider(node, i);
+                container.appendChild(divider);
+            }
+        }
 
         return container;
     }
 
-    private createSplitPane(childId: string, ratio: number, isFirst: boolean): HTMLElement {
+    private createSplitPane(childId: string, ratio: number, index: number): HTMLElement {
         const pane = document.createElement('div');
         pane.className = 'pale-window-split__pane';
-        pane.dataset.pane = isFirst ? 'first' : 'second';
+        pane.dataset.pane = index === 0 ? 'first' : index === 1 ? 'second' : `pane-${index}`;
+        pane.dataset.paneIndex = index.toString();
 
         const clamped = Math.max(Math.min(ratio, 0.9), 0.1);
         pane.style.flex = `${clamped} 1 0`;
@@ -181,11 +201,12 @@ export class WindowDomRenderer {
         return pane;
     }
 
-    private createSplitDivider(node: SplitContainerNode): HTMLElement {
+    private createSplitDivider(node: SplitContainerNode, dividerIndex: number): HTMLElement {
         const divider = document.createElement('div');
         divider.className = 'pale-window-split__divider';
         divider.dataset.direction = node.direction;
         divider.dataset.splitId = node.id;
+        divider.dataset.dividerIndex = dividerIndex.toString();
         return divider;
     }
 

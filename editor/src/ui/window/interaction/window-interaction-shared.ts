@@ -11,7 +11,7 @@ export type DockSide = 'top' | 'bottom' | 'left' | 'right';
 export type DockingScope = 'docking' | 'floating';
 
 export interface DockingPreview {
-    kind: 'tab' | 'simple' | 'divide';
+    kind: 'tab' | 'simple' | 'divide' | 'workspace';
     scope: DockingScope;
     containerId?: string;
     index?: number;
@@ -21,7 +21,7 @@ export interface DockingPreview {
     position?: PositionHint;
     header?: HTMLElement;
     targetId?: string;
-    targetType?: 'tab' | 'simple';
+    targetType?: 'tab' | 'simple' | 'split';
     direction?: SplitDirection;
     side?: DockSide;
     host?: HTMLElement;

@@ -11,7 +11,6 @@ import { WindowTreeStore } from '../window-tree-store';
 import { FloatingWindowDescriptor, SplitDirection, TabContainerNode } from '../types';
 import { InputEvent } from '../../../engine';
 
-const DIVIDE_FLOAT_ZONE_RATIO = 0.9;
 const TAB_REORDER_VERTICAL_MARGIN = 14;
 
 interface FloatingDragContext {
@@ -710,22 +709,56 @@ export class FloatingInteraction {
                 return null;
             }
 
+            // Check if within leaf container edge 20% zone
             if (this.isWithinDivideFloatZone(rect, event.clientX, event.clientY)) {
-                return null;
+                const side = this.calculateNearestSide(rect, event.clientX, event.clientY);
+                const divide = this.mapSideToDivide(side);
+                if (!divide) {
+                    return null; // Top edge does not trigger split
+                }
+                return {
+                    kind: 'divide',
+                    scope,
+                    targetId: containerId,
+                    targetType: 'tab',
+                    direction: divide.direction,
+                    position: divide.position,
+                    side,
+                    host: content
+                };
             }
 
-            const side = this.calculateNearestSide(rect, event.clientX, event.clientY);
-            const divide = this.mapSideToDivide(side);
-            return {
-                kind: 'divide',
-                scope,
-                targetId: containerId,
-                targetType: 'tab',
-                direction: divide.direction,
-                position: divide.position,
-                side,
-                host: content
-            };
+            // Check if within parent container edge 10% zone for node promotion
+            const parentContainer = container.parentElement?.closest<HTMLElement>('.pale-window-split');
+            if (parentContainer) {
+                const parentRect = parentContainer.getBoundingClientRect();
+                if (this.isWithinParentContainerEdge(parentRect, event.clientX, event.clientY)) {
+                    const parentId = parentContainer.dataset.nodeId;
+                    if (parentId) {
+                        const parentNode = this.store.getNode(parentId);
+                        if (parentNode && parentNode.type === 'split') {
+                            const side = this.calculateNearestSide(parentRect, event.clientX, event.clientY);
+                            const divide = this.mapSideToDivide(side);
+                            if (!divide) {
+                                return null; // Top edge does not trigger
+                            }
+                            // Node promotion: add to parent container
+                            return {
+                                kind: 'divide',
+                                scope,
+                                targetId: parentId,
+                                targetType: 'split',
+                                direction: divide.direction,
+                                position: divide.position,
+                                side,
+                                host: parentContainer
+                            };
+                        }
+                    }
+                }
+            }
+
+            return null;
         }
 
         const simple = element.closest<HTMLElement>('.pale-window-simple');
@@ -741,22 +774,81 @@ export class FloatingInteraction {
                 return null;
             }
 
+            // Check if within leaf container edge 20% zone
             if (this.isWithinDivideFloatZone(rect, event.clientX, event.clientY)) {
-                return null;
+                const side = this.calculateNearestSide(rect, event.clientX, event.clientY);
+                const divide = this.mapSideToDivide(side);
+                if (!divide) {
+                    return null; // Top edge does not trigger split
+                }
+                return {
+                    kind: 'divide',
+                    scope,
+                    targetId: simple.dataset.nodeId,
+                    targetType: 'simple',
+                    direction: divide.direction,
+                    position: divide.position,
+                    side,
+                    host: simple
+                };
             }
 
-            const side = this.calculateNearestSide(rect, event.clientX, event.clientY);
-            const divide = this.mapSideToDivide(side);
-            return {
-                kind: 'divide',
-                scope,
-                targetId: simple.dataset.nodeId,
-                targetType: 'simple',
-                direction: divide.direction,
-                position: divide.position,
-                side,
-                host: simple
-            };
+            // Check if within parent container edge 10% zone for node promotion
+            const parentContainer = simple.parentElement?.closest<HTMLElement>('.pale-window-split');
+            if (parentContainer) {
+                const parentRect = parentContainer.getBoundingClientRect();
+                if (this.isWithinParentContainerEdge(parentRect, event.clientX, event.clientY)) {
+                    const parentId = parentContainer.dataset.nodeId;
+                    if (parentId) {
+                        const parentNode = this.store.getNode(parentId);
+                        if (parentNode && parentNode.type === 'split') {
+                            const side = this.calculateNearestSide(parentRect, event.clientX, event.clientY);
+                            const divide = this.mapSideToDivide(side);
+                            if (!divide) {
+                                return null; // Top edge does not trigger
+                            }
+                            // Node promotion: add to parent container
+                            return {
+                                kind: 'divide',
+                                scope,
+                                targetId: parentId,
+                                targetType: 'split',
+                                direction: divide.direction,
+                                position: divide.position,
+                                side,
+                                host: parentContainer
+                            };
+                        }
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        // Check if workspace is empty and mouse is over workspace area
+        if (this.store.getRootId() === null) {
+            const workspaceRect = this.workspaceElement.getBoundingClientRect();
+            // Check if mouse is within workspace bounds (excluding floating windows)
+            if (
+                event.clientX >= workspaceRect.left &&
+                event.clientX <= workspaceRect.right &&
+                event.clientY >= workspaceRect.top &&
+                event.clientY <= workspaceRect.bottom
+            ) {
+                // Check if mouse is not over a floating window
+                const floatingWindow = element.closest<HTMLElement>('.pale-window-floating');
+                if (!floatingWindow || floatingWindow.dataset.nodeId === sourceId) {
+                    // Find root layer or placeholder for preview host
+                    const rootLayer = this.workspaceElement.querySelector<HTMLElement>('.pale-window-root-layer');
+                    const placeholder = this.workspaceElement.querySelector<HTMLElement>('.pale-window-placeholder');
+                    return {
+                        kind: 'workspace',
+                        scope: 'docking',
+                        host: rootLayer || placeholder || this.workspaceElement
+                    };
+                }
+            }
         }
 
         return null;
@@ -780,6 +872,13 @@ export class FloatingInteraction {
         this.dockingPreview = preview;
 
         switch (preview.kind) {
+            case 'workspace':
+                this.clearHeaderHighlight();
+                this.hideTabInsertPreview();
+                if (preview.host) {
+                    this.showWorkspacePreview(preview.host);
+                }
+                break;
             case 'tab':
                 this.clearHeaderHighlight();
                 this.hideDividePreview();
@@ -874,6 +973,19 @@ export class FloatingInteraction {
         }
     }
 
+    private showWorkspacePreview(host: HTMLElement): void {
+        const preview = this.ensureDividePreview();
+        const workspaceRect = this.workspaceElement.getBoundingClientRect();
+        const rect = host.getBoundingClientRect();
+
+        // Show preview covering the entire workspace area
+        preview.style.display = 'block';
+        preview.style.left = `${rect.left - workspaceRect.left}px`;
+        preview.style.top = `${rect.top - workspaceRect.top}px`;
+        preview.style.width = `${rect.width}px`;
+        preview.style.height = `${rect.height}px`;
+    }
+
     private commitDocking(): boolean {
         if (!this.floatingDragCtx || !this.dockingPreview) {
             this.clearDockingPreview();
@@ -892,6 +1004,12 @@ export class FloatingInteraction {
         }
 
         switch (preview.kind) {
+            case 'workspace': {
+                // Convert floating window to docking root
+                const rootId = descriptor.rootId;
+                this.store.setFloatingAsRoot(rootId);
+                break;
+            }
             case 'tab':
                 if (!preview.containerId || typeof preview.index !== 'number') break;
                 this.store.moveSimpleToTab(sourceNodeId, preview.containerId, preview.index, {
@@ -909,10 +1027,20 @@ export class FloatingInteraction {
                 break;
             case 'divide': {
                 if (!preview.targetId || !preview.direction || !preview.position) break;
-                const targetSimpleId =
-                    preview.targetType === 'tab'
-                        ? this.resolveActiveSimpleIdFromContainer(preview.targetId)
-                        : preview.targetId;
+                let targetSimpleId: string | null = null;
+                if (preview.targetType === 'tab') {
+                    targetSimpleId = this.resolveActiveSimpleIdFromContainer(preview.targetId);
+                } else if (preview.targetType === 'split') {
+                    // For split container, find a simple node within it to use as target
+                    // The node promotion logic will handle adding to parent
+                    const splitNode = this.store.getNode(preview.targetId);
+                    if (splitNode && splitNode.type === 'split') {
+                        // Find first simple node in the split container
+                        targetSimpleId = this.resolveActiveSimpleIdFromContainer(preview.targetId);
+                    }
+                } else {
+                    targetSimpleId = preview.targetId;
+                }
                 if (!targetSimpleId) break;
                 this.store.divideSimpleWithExisting(targetSimpleId, sourceNodeId, preview.direction, preview.position, {
                     scope
@@ -952,17 +1080,31 @@ export class FloatingInteraction {
     }
 
     private isWithinDivideFloatZone(rect: DOMRect, x: number, y: number): boolean {
-        if (DIVIDE_FLOAT_ZONE_RATIO <= 0) {
-            return false;
-        }
-        const zoneWidth = rect.width * DIVIDE_FLOAT_ZONE_RATIO;
-        const zoneHeight = rect.height * DIVIDE_FLOAT_ZONE_RATIO;
-        const zoneLeft = rect.left + (rect.width - zoneWidth) / 2;
-        const zoneTop = rect.top + (rect.height - zoneHeight) / 2;
-        const zoneRight = zoneLeft + zoneWidth;
-        const zoneBottom = zoneTop + zoneHeight;
-
-        return x >= zoneLeft && x <= zoneRight && y >= zoneTop && y <= zoneBottom;
+        // 20% edge zone for leaf container split
+        const edgeZoneRatio = 0.2;
+        const edgeWidth = rect.width * edgeZoneRatio;
+        const edgeHeight = rect.height * edgeZoneRatio;
+        
+        // Check if within edge zones (left, right, bottom - not top)
+        const inLeftEdge = x >= rect.left && x <= rect.left + edgeWidth;
+        const inRightEdge = x >= rect.right - edgeWidth && x <= rect.right;
+        const inBottomEdge = y >= rect.bottom - edgeHeight && y <= rect.bottom;
+        
+        return inLeftEdge || inRightEdge || inBottomEdge;
+    }
+    
+    private isWithinParentContainerEdge(rect: DOMRect, x: number, y: number): boolean {
+        // 10% edge zone for parent container promotion
+        const edgeZoneRatio = 0.1;
+        const edgeWidth = rect.width * edgeZoneRatio;
+        const edgeHeight = rect.height * edgeZoneRatio;
+        
+        // Check if within edge zones (left, right, bottom - not top)
+        const inLeftEdge = x >= rect.left && x <= rect.left + edgeWidth;
+        const inRightEdge = x >= rect.right - edgeWidth && x <= rect.right;
+        const inBottomEdge = y >= rect.bottom - edgeHeight && y <= rect.bottom;
+        
+        return inLeftEdge || inRightEdge || inBottomEdge;
     }
 
     private calculateNearestSide(rect: DOMRect, x: number, y: number): DockSide {
@@ -987,7 +1129,7 @@ export class FloatingInteraction {
         return side;
     }
 
-    private mapSideToDivide(side: DockSide): { direction: SplitDirection; position: PositionHint } {
+    private mapSideToDivide(side: DockSide): { direction: SplitDirection; position: PositionHint } | null {
         switch (side) {
             case 'left':
                 return { direction: 'horizontal', position: 'before' };
@@ -997,7 +1139,7 @@ export class FloatingInteraction {
                 return { direction: 'vertical', position: 'after' };
             case 'top':
             default:
-                return { direction: 'vertical', position: 'before' };
+                return null; // Top edge does not trigger split
         }
     }
 

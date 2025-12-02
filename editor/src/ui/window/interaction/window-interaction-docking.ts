@@ -11,6 +11,7 @@ interface DividerDragContext {
     firstPane: HTMLElement;
     secondPane: HTMLElement;
     divider: HTMLElement;
+    dividerIndex: number;
     containerRect: DOMRect;
     previewRatio: number;
 }
@@ -72,7 +73,12 @@ export class DockingInteraction {
 
     private beginDividerDrag(divider: HTMLElement): DragSession | null {
         const splitId = divider.dataset.splitId;
-        if (!splitId) {
+        const dividerIndexStr = divider.dataset.dividerIndex;
+        if (!splitId || dividerIndexStr === undefined) {
+            return null;
+        }
+        const dividerIndex = parseInt(dividerIndexStr, 10);
+        if (isNaN(dividerIndex)) {
             return null;
         }
         const node = this.store.getNode(splitId);
@@ -89,14 +95,18 @@ export class DockingInteraction {
             return null;
         }
 
+        const splitNode = node as import('../types').SplitContainerNode;
+        const currentRatio = splitNode.ratios[dividerIndex] ?? 0.5;
+
         this.dividerCtx = {
             nodeId: node.id,
             container,
             firstPane,
             secondPane,
             divider,
+            dividerIndex,
             containerRect: container.getBoundingClientRect(),
-            previewRatio: node.ratio
+            previewRatio: currentRatio
         };
 
         return {
@@ -108,12 +118,13 @@ export class DockingInteraction {
 
     private handleDividerMove(event: MouseEvent): void {
         if (!this.dividerCtx) return;
-        const { nodeId, containerRect, firstPane, secondPane } = this.dividerCtx;
+        const { nodeId, container, containerRect, dividerIndex } = this.dividerCtx;
         const node = this.store.getNode(nodeId);
         if (!node || node.type !== 'split') {
             return;
         }
 
+        const splitNode = node as import('../types').SplitContainerNode;
         let ratio: number;
         if (node.direction === 'horizontal') {
             const totalWidth = containerRect.width;
@@ -124,18 +135,42 @@ export class DockingInteraction {
             if (totalHeight <= 0) return;
             ratio = (event.clientY - containerRect.top) / totalHeight;
         }
-        ratio = Math.max(0.1, Math.min(0.9, ratio));
+        
+        // Clamp ratio based on adjacent dividers
+        const minRatio = dividerIndex > 0 ? splitNode.ratios[dividerIndex - 1] + 0.1 : 0.1;
+        const maxRatio = dividerIndex < splitNode.ratios.length - 1 
+            ? splitNode.ratios[dividerIndex + 1] - 0.1 
+            : 0.9;
+        ratio = Math.max(minRatio, Math.min(maxRatio, ratio));
+        
         this.dividerCtx.previewRatio = ratio;
-        firstPane.style.flex = `${ratio} 1 0`;
-        secondPane.style.flex = `${1 - ratio} 1 0`;
+        
+        // Update preview ratios array
+        const previewRatios = [...splitNode.ratios];
+        previewRatios[dividerIndex] = ratio;
+        
+        // Update all panes' flex values
+        const panes = Array.from(container.querySelectorAll<HTMLElement>('.pale-window-split__pane'));
+        for (let i = 0; i < panes.length; i++) {
+            let paneRatio: number;
+            if (i === 0) {
+                paneRatio = previewRatios[0];
+            } else if (i === panes.length - 1) {
+                paneRatio = 1 - previewRatios[previewRatios.length - 1];
+            } else {
+                paneRatio = previewRatios[i] - previewRatios[i - 1];
+            }
+            const clamped = Math.max(0.1, Math.min(0.9, paneRatio));
+            panes[i].style.flex = `${clamped} 1 0`;
+        }
     }
 
     private stopDividerDrag(cancelled: boolean): void {
         if (!this.dividerCtx) return;
-        const { divider, nodeId, previewRatio } = this.dividerCtx;
+        const { divider, nodeId, dividerIndex, previewRatio } = this.dividerCtx;
         divider.classList.remove('pale-window-split__divider--active');
         if (!cancelled) {
-            this.store.updateSplitRatio(nodeId, previewRatio);
+            this.store.updateSplitRatio(nodeId, dividerIndex, previewRatio);
         }
         this.dividerCtx = null;
     }

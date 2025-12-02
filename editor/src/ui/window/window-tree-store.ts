@@ -84,35 +84,59 @@ export class WindowTreeStore {
             return this.divideTabContainer(parent, direction, newNode, target, position, 'docking');
         }
 
+        // Check for node promotion: if parent is split with same direction, add to parent
+        if (parent && parent.type === 'split' && parent.direction === direction) {
+            const splitParent = parent as SplitContainerNode;
+            const targetIndex = splitParent.children.indexOf(target.id);
+            if (targetIndex !== -1) {
+                newNode.parentId = splitParent.id;
+                newNode.headless = true;
+                
+                if (position === 'before') {
+                    splitParent.children.splice(targetIndex, 0, newNode.id);
+                } else {
+                    splitParent.children.splice(targetIndex + 1, 0, newNode.id);
+                }
+                
+                // Recalculate ratios for equal distribution
+                this.recalculateSplitRatios(splitParent);
+                
+                this.emit({ type: 'tree-changed' });
+                return newNode;
+            }
+        }
+
+        // Create new split container
         const splitContainer = this.createSplitContainerNode(direction);
         splitContainer.parentId = parent ? parent.id : null;
 
         if (position === 'before') {
-            splitContainer.firstChildId = newNode.id;
-            splitContainer.secondChildId = target.id;
+            splitContainer.children = [newNode.id, target.id];
         } else {
-            splitContainer.firstChildId = target.id;
-            splitContainer.secondChildId = newNode.id;
+            splitContainer.children = [target.id, newNode.id];
         }
+        splitContainer.ratios = [0.5];
 
         target.parentId = splitContainer.id;
         newNode.parentId = splitContainer.id;
+        newNode.headless = true;
         this.nodesMap.set(splitContainer.id, splitContainer);
 
         if (!parent) {
             this.rootId = splitContainer.id;
         } else if (parent.type === 'split') {
-            if (parent.firstChildId === target.id) {
-                parent.firstChildId = splitContainer.id;
-            } else {
-                parent.secondChildId = splitContainer.id;
+            const splitParent = parent as SplitContainerNode;
+            const targetIndex = splitParent.children.indexOf(target.id);
+            if (targetIndex !== -1) {
+                splitParent.children[targetIndex] = splitContainer.id;
+                this.recalculateSplitRatios(splitParent);
             }
         } else {
             const tabParent = parent as TabContainerNode;
             tabParent.children = tabParent.children.map((childId: string) =>
                 childId === target.id ? splitContainer.id : childId
             );
-            tabParent.activeChildId = splitContainer.firstChildId;
+            tabParent.activeChildId = splitContainer.children[0];
         }
 
         this.emit({ type: 'tree-changed' });
@@ -290,10 +314,11 @@ export class WindowTreeStore {
         if (!parent) {
             this.rootId = tabNode.id;
         } else if (parent.type === 'split') {
-            if (parent.firstChildId === target.id) {
-                parent.firstChildId = tabNode.id;
-            } else {
-                parent.secondChildId = tabNode.id;
+            const splitParent = parent as SplitContainerNode;
+            const targetIndex = splitParent.children.indexOf(target.id);
+            if (targetIndex !== -1) {
+                splitParent.children[targetIndex] = tabNode.id;
+                this.recalculateSplitRatios(splitParent);
             }
         } else {
             const tabParent = parent as TabContainerNode;
@@ -350,16 +375,20 @@ export class WindowTreeStore {
         this.listeners.clear();
     }
 
-    public updateSplitRatio(splitId: string, ratio: number): void {
+    public updateSplitRatio(splitId: string, dividerIndex: number, ratio: number): void {
         const node = this.nodesMap.get(splitId);
         if (!node || node.type !== 'split') {
             return;
         }
-        const clamped = Math.max(0.1, Math.min(0.9, ratio));
-        if (Math.abs(node.ratio - clamped) < 0.0001) {
+        const splitNode = node as SplitContainerNode;
+        if (dividerIndex < 0 || dividerIndex >= splitNode.ratios.length) {
             return;
         }
-        node.ratio = clamped;
+        const clamped = Math.max(0.1, Math.min(0.9, ratio));
+        if (Math.abs(splitNode.ratios[dividerIndex] - clamped) < 0.0001) {
+            return;
+        }
+        splitNode.ratios[dividerIndex] = clamped;
         this.emit({ type: 'tree-changed' });
     }
 
@@ -527,6 +556,37 @@ export class WindowTreeStore {
         }
     }
 
+    public setFloatingAsRoot(rootId: string): void {
+        const rootNode = this.nodesMap.get(rootId);
+        if (!rootNode) {
+            return;
+        }
+
+        // Remove from floating map
+        const floatingDescriptor = this.floatingRootsMap.get(rootId);
+        if (floatingDescriptor) {
+            const node = this.nodesMap.get(rootId);
+            if (node && node.type === 'simple') {
+                node.floatingSize = {
+                    width: floatingDescriptor.restoreWidth ?? floatingDescriptor.width,
+                    height: floatingDescriptor.restoreHeight ?? floatingDescriptor.height
+                };
+            }
+            this.clearFloatingIndexForRoot(rootId);
+            this.floatingRootsMap.delete(rootId);
+            this.emit({ type: 'floating-changed', rootId, floating: false });
+        }
+
+        // Ensure parentId is null
+        rootNode.parentId = null;
+
+        // Set as root
+        this.rootId = rootId;
+
+        // Emit tree-changed event
+        this.emit({ type: 'tree-changed' });
+    }
+
     private reassignFloatingRoot(oldRootId: string, newRootId: string): void {
         const descriptor = this.floatingRootsMap.get(oldRootId);
         if (!descriptor) {
@@ -564,6 +624,32 @@ export class WindowTreeStore {
         scope: OperationScope
     ): SimpleWindowNode {
         const parent = this.getParentContainerById(container.parentId);
+        
+        // Check for node promotion: if parent is split with same direction, add to parent
+        if (parent && parent.type === 'split' && parent.direction === direction) {
+            const splitParent = parent as SplitContainerNode;
+            const containerIndex = splitParent.children.indexOf(container.id);
+            if (containerIndex !== -1) {
+                const newTab = this.wrapInStandaloneTab(newNode);
+                this.nodesMap.set(newTab.id, newTab);
+                newTab.parentId = splitParent.id;
+                
+                if (position === 'before') {
+                    splitParent.children.splice(containerIndex, 0, newTab.id);
+                } else {
+                    splitParent.children.splice(containerIndex + 1, 0, newTab.id);
+                }
+                
+                // Recalculate ratios for equal distribution
+                this.recalculateSplitRatios(splitParent);
+                
+                container.activeChildId = target.id;
+                this.emit({ type: 'tree-changed' });
+                return newNode;
+            }
+        }
+
+        // Create new split container
         const splitContainer = this.createSplitContainerNode(direction);
         splitContainer.parentId = parent ? parent.id : null;
 
@@ -571,12 +657,11 @@ export class WindowTreeStore {
         this.nodesMap.set(newTab.id, newTab);
 
         if (position === 'before') {
-            splitContainer.firstChildId = newTab.id;
-            splitContainer.secondChildId = container.id;
+            splitContainer.children = [newTab.id, container.id];
         } else {
-            splitContainer.firstChildId = container.id;
-            splitContainer.secondChildId = newTab.id;
+            splitContainer.children = [container.id, newTab.id];
         }
+        splitContainer.ratios = [0.5];
 
         newTab.parentId = splitContainer.id;
         container.parentId = splitContainer.id;
@@ -590,17 +675,18 @@ export class WindowTreeStore {
                 this.reassignFloatingRoot(container.id, splitContainer.id);
             }
         } else if (parent.type === 'split') {
-            if (parent.firstChildId === container.id) {
-                parent.firstChildId = splitContainer.id;
-            } else {
-                parent.secondChildId = splitContainer.id;
+            const splitParent = parent as SplitContainerNode;
+            const containerIndex = splitParent.children.indexOf(container.id);
+            if (containerIndex !== -1) {
+                splitParent.children[containerIndex] = splitContainer.id;
+                this.recalculateSplitRatios(splitParent);
             }
         } else {
             const tabParent = parent as TabContainerNode;
             tabParent.children = tabParent.children.map((childId: string) =>
                 childId === container.id ? splitContainer.id : childId
             );
-            tabParent.activeChildId = splitContainer.firstChildId;
+            tabParent.activeChildId = splitContainer.children[0];
         }
 
         container.activeChildId = target.id;
@@ -637,16 +723,23 @@ export class WindowTreeStore {
         };
     }
 
-    private createSplitContainerNode(direction: SplitDirection): SplitContainerNode {
-        return {
+    private createSplitContainerNode(direction: SplitDirection, children: string[] = []): SplitContainerNode {
+        const node: SplitContainerNode = {
             id: nextNodeId('split'),
             type: 'split',
             parentId: null,
             direction,
-            ratio: 0.5,
-            firstChildId: '',
-            secondChildId: ''
+            children: [...children],
+            ratios: []
         };
+        // Initialize ratios: equal distribution
+        if (children.length > 1) {
+            const ratioPerChild = 1 / children.length;
+            for (let i = 0; i < children.length - 1; i++) {
+                node.ratios.push((i + 1) * ratioPerChild);
+            }
+        }
+        return node;
     }
 
     private getParentContainerById(
@@ -689,14 +782,15 @@ export class WindowTreeStore {
         }
 
         if (parent.type === 'split') {
-            if (parent.firstChildId === node.id) {
-                parent.firstChildId = '';
-            }
-            if (parent.secondChildId === node.id) {
-                parent.secondChildId = '';
+            const splitParent = parent as SplitContainerNode;
+            const nodeIndex = splitParent.children.indexOf(node.id);
+            if (nodeIndex !== -1) {
+                splitParent.children.splice(nodeIndex, 1);
+                // Recalculate ratios after removing a child
+                this.recalculateSplitRatios(splitParent);
             }
             node.parentId = null;
-            this.cleanupSplitAfterChange(parent);
+            this.cleanupSplitAfterChange(splitParent);
         }
     }
 
@@ -740,10 +834,11 @@ export class WindowTreeStore {
         }
 
         if (parent.type === 'split') {
-            if (parent.firstChildId === node.id) {
-                parent.firstChildId = tabNode.id;
-            } else if (parent.secondChildId === node.id) {
-                parent.secondChildId = tabNode.id;
+            const splitParent = parent as SplitContainerNode;
+            const nodeIndex = splitParent.children.indexOf(node.id);
+            if (nodeIndex !== -1) {
+                splitParent.children[nodeIndex] = tabNode.id;
+                this.recalculateSplitRatios(splitParent);
             }
         } else if (parent.type === 'tab') {
             parent.children = parent.children.map(childId => (childId === node.id ? tabNode.id : childId));
@@ -765,25 +860,23 @@ export class WindowTreeStore {
     }
 
     private cleanupSplitAfterChange(parent: SplitContainerNode): void {
-        const first = parent.firstChildId;
-        const second = parent.secondChildId;
-
-        if (first && second) {
-            return;
-        }
-
-        if (!first && !second) {
+        if (parent.children.length === 0) {
             this.removeNodeAndCleanup(parent);
             return;
         }
 
-        const remaining = first || second;
-        if (!remaining) {
-            this.removeNodeAndCleanup(parent);
+        if (parent.children.length === 1) {
+            const remaining = parent.children[0];
+            if (remaining) {
+                this.promoteSingleChildThroughParent(parent, remaining);
+            } else {
+                this.removeNodeAndCleanup(parent);
+            }
             return;
         }
 
-        this.promoteSingleChildThroughParent(parent, remaining);
+        // Recalculate ratios if children changed
+        this.recalculateSplitRatios(parent);
     }
 
     private promoteSingleChildThroughParent(parent: WindowTreeNode, childId: string): void {
@@ -806,14 +899,14 @@ export class WindowTreeStore {
             if (!grand) {
                 child.parentId = null;
             } else if (grand.type === 'split') {
-                if (grand.firstChildId === parent.id) {
-                    grand.firstChildId = child.id;
-                }
-                if (grand.secondChildId === parent.id) {
-                    grand.secondChildId = child.id;
+                const splitGrand = grand as SplitContainerNode;
+                const parentIndex = splitGrand.children.indexOf(parent.id);
+                if (parentIndex !== -1) {
+                    splitGrand.children[parentIndex] = child.id;
+                    this.recalculateSplitRatios(splitGrand);
                 }
                 child.parentId = grand.id;
-                this.cleanupSplitAfterChange(grand);
+                this.cleanupSplitAfterChange(splitGrand);
             } else if (grand.type === 'tab') {
                 const index = grand.children.indexOf(parent.id);
                 if (index !== -1) {
@@ -849,13 +942,13 @@ export class WindowTreeStore {
         }
 
         if (grand.type === 'split') {
-            if (grand.firstChildId === parent.id) {
-                grand.firstChildId = '';
+            const splitGrand = grand as SplitContainerNode;
+            const parentIndex = splitGrand.children.indexOf(parent.id);
+            if (parentIndex !== -1) {
+                splitGrand.children.splice(parentIndex, 1);
+                this.recalculateSplitRatios(splitGrand);
             }
-            if (grand.secondChildId === parent.id) {
-                grand.secondChildId = '';
-            }
-            this.cleanupSplitAfterChange(grand);
+            this.cleanupSplitAfterChange(splitGrand);
         } else if (grand.type === 'tab') {
             grand.children = grand.children.filter(id => id !== parent.id);
             this.cleanupTabAfterChange(grand);
@@ -897,11 +990,14 @@ export class WindowTreeStore {
             return this.resolveActiveNodeIdFrom(primaryChildId);
         }
         const splitNode = node as SplitContainerNode;
-        const first = this.resolveActiveNodeIdFrom(splitNode.firstChildId || null);
-        if (first) {
-            return first;
+        // Try to resolve from each child in order
+        for (const childId of splitNode.children) {
+            const result = this.resolveActiveNodeIdFrom(childId);
+            if (result) {
+                return result;
+            }
         }
-        return this.resolveActiveNodeIdFrom(splitNode.secondChildId || null);
+        return null;
     }
 
     private syncFloatingActiveNode(rootId: string): void {
@@ -956,16 +1052,10 @@ export class WindowTreeStore {
 
             if (current.type === 'split') {
                 const splitNode = current as SplitContainerNode;
-                if (splitNode.firstChildId) {
-                    const first = this.nodesMap.get(splitNode.firstChildId);
-                    if (first) {
-                        stack.push(first);
-                    }
-                }
-                if (splitNode.secondChildId) {
-                    const second = this.nodesMap.get(splitNode.secondChildId);
-                    if (second) {
-                        stack.push(second);
+                for (const childId of splitNode.children) {
+                    const child = this.nodesMap.get(childId);
+                    if (child) {
+                        stack.push(child);
                     }
                 }
             }
@@ -977,6 +1067,20 @@ export class WindowTreeStore {
         }
 
         this.syncFloatingActiveNode(rootId);
+    }
+
+    private recalculateSplitRatios(splitNode: SplitContainerNode): void {
+        if (splitNode.children.length <= 1) {
+            splitNode.ratios = [];
+            return;
+        }
+        
+        // Equal distribution
+        const ratioPerChild = 1 / splitNode.children.length;
+        splitNode.ratios = [];
+        for (let i = 0; i < splitNode.children.length - 1; i++) {
+            splitNode.ratios.push((i + 1) * ratioPerChild);
+        }
     }
 
     private emit(event: WindowTreeEvent): void {
