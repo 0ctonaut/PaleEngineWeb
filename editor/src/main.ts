@@ -22,6 +22,7 @@ function main(): void {
         
         const container = document.querySelector('#workspace') as HTMLElement;
         const toolbarContainer = document.querySelector('#toolbar') as HTMLElement;
+        const bottombarContainer = document.querySelector('#bottombar') as HTMLElement;
         
         if (!container) {
             throw new Error('Scene container element not found. Please ensure #workspace exists in the DOM.');
@@ -31,11 +32,15 @@ function main(): void {
             throw new Error('Toolbar container element not found. Please ensure #toolbar exists in the DOM.');
         }
         
+        if (!bottombarContainer) {
+            throw new Error('BottomBar container element not found. Please ensure #bottombar exists in the DOM.');
+        }
+        
         if (container.clientWidth === 0 || container.clientHeight === 0) {
             console.warn('Container has zero dimensions. Scene may not render correctly.');
         }
         
-        worldUI = createWorldUI({ workspaceContainer: container, toolbarContainer });
+        worldUI = createWorldUI({ workspaceContainer: container, toolbarContainer, bottombarContainer });
         const { viewportElement, windowManager } = worldUI;
 
         world = new World(viewportElement);

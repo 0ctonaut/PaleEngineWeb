@@ -6,7 +6,7 @@ export function createCamera(
     fov: number = 75,
     aspect: number = 1,
     near: number = 0.1,
-    far: number = 1000,
+    far: number = 100000,
     position: CameraPosition = [0, 0, 10]
 ): PerspectiveCamera {
     // Parameter validation

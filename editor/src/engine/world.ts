@@ -6,9 +6,10 @@ import {
     createSphere,
     createLights,
     Resizer,
-    SelectionCategory
+    SelectionCategory,
+    AnimationController
 } from '@paleengine/core';
-import { PerspectiveCamera, WebGPURenderer, Scene, Mesh, Color, Object3D } from 'three/webgpu';
+import { PerspectiveCamera, WebGPURenderer, Scene, Mesh, Color, Object3D, Group } from 'three/webgpu';
 import { LocalInputManager, InputContext, EventTypes, InputEvent } from './input';
 import {
     OutlineRenderer,
@@ -82,6 +83,9 @@ export class World {
     
     // Performance monitoring
     private performanceMonitor!: PerformanceMonitor;
+    
+    // Animation controllers
+    private animationControllers: AnimationController[] = [];
 
     public constructor(container: HTMLElement) {
         this.container = container;
@@ -112,7 +116,13 @@ export class World {
         
         const deltaTime = this.calculateDeltaTime();
         this.performanceMonitor.update();
-        this.processorManager.update(deltaTime);    
+        this.processorManager.update(deltaTime);
+        
+        // Update all animation controllers
+        this.animationControllers.forEach(controller => {
+            controller.update(deltaTime);
+        });
+        
         await this.renderInternal();
         
         if (!this.isDisposed) {
@@ -137,6 +147,12 @@ export class World {
     public dispose(): void {
         this.isDisposed = true;
         this.stopAnimation();
+        
+        // Dispose all animation controllers
+        this.animationControllers.forEach(controller => {
+            controller.dispose();
+        });
+        this.animationControllers = [];
         
         if (this.inputManager) {
             this.inputManager.dispose();
@@ -183,6 +199,34 @@ export class World {
         this.scene.add(mesh);
         this.meshes.push(mesh);
         this.emitHierarchyChange('add', { object: mesh, parent: mesh.parent ?? null });
+    }
+
+    public addObject(object: Object3D): void {
+        this.scene.add(object);
+        
+        // Set selection category
+        if (!object.userData.selectionCategory) {
+            object.userData.selectionCategory = SelectionCategory.SCENE_OBJECT;
+        }
+        
+        // If object is a Mesh, add to meshes array
+        if (object instanceof Mesh) {
+            this.meshes.push(object);
+        }
+        
+        // If object is a Group, traverse and collect all Meshes
+        if (object instanceof Group) {
+            object.traverse((child) => {
+                if (child instanceof Mesh) {
+                    this.meshes.push(child);
+                }
+                if (!child.userData.selectionCategory) {
+                    child.userData.selectionCategory = SelectionCategory.SCENE_OBJECT;
+                }
+            });
+        }
+        
+        this.emitHierarchyChange('add', { object, parent: object.parent ?? null });
     }
 
     public removeMesh(mesh: Mesh): void {
@@ -283,6 +327,11 @@ export class World {
     public update(deltaTime: number): void {
         this.performanceMonitor.update();
         this.processorManager.update(deltaTime);
+        
+        // Update all animation controllers
+        this.animationControllers.forEach(controller => {
+            controller.update(deltaTime);
+        });
     }
     
     public async render(width: number, height: number, gizmoSize?: number): Promise<void> {
@@ -345,8 +394,8 @@ export class World {
                 rotateSensitivity: 0.01,
                 panSensitivity: 0.01,
                 zoomSensitivity: 0.1,
-                minDistance: 1,
-                maxDistance: 100
+                minDistance: 0.1,
+                maxDistance: 10000
             }
         );
     }
@@ -499,6 +548,72 @@ export class World {
 
     public getPerformanceMonitor(): PerformanceMonitor {
         return this.performanceMonitor;
+    }
+
+    /**
+     * Register an AnimationController to be updated each frame
+     */
+    public registerAnimationController(controller: AnimationController): void {
+        if (!this.animationControllers.includes(controller)) {
+            this.animationControllers.push(controller);
+        }
+    }
+
+    /**
+     * Unregister an AnimationController
+     */
+    public unregisterAnimationController(controller: AnimationController): void {
+        const index = this.animationControllers.indexOf(controller);
+        if (index > -1) {
+            this.animationControllers.splice(index, 1);
+        }
+    }
+
+    /**
+     * Get all registered AnimationControllers
+     */
+    public getAnimationControllers(): AnimationController[] {
+        return [...this.animationControllers];
+    }
+
+    /**
+     * Play all animations
+     */
+    public playAllAnimations(): void {
+        this.animationControllers.forEach(controller => {
+            // 如果 timeScale === 0，说明之前播放过但被暂停了，使用 resume
+            // 否则使用 play（首次播放或已停止）
+            if (controller.getTimeScale() === 0) {
+                controller.resume();
+            } else {
+                controller.play();
+            }
+        });
+    }
+
+    /**
+     * Pause all animations
+     */
+    public pauseAllAnimations(): void {
+        this.animationControllers.forEach(controller => {
+            controller.pause();
+        });
+    }
+
+    /**
+     * Resume all animations
+     */
+    public resumeAllAnimations(): void {
+        this.animationControllers.forEach(controller => {
+            controller.resume();
+        });
+    }
+
+    /**
+     * Check if any animation is playing
+     */
+    public isAnyAnimationPlaying(): boolean {
+        return this.animationControllers.some(controller => controller.isAnimating());
     }
 
     public on<K extends keyof WorldEventMap>(type: K, listener: (event: WorldEventMap[K]) => void): void {

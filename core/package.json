@@ -20,6 +20,10 @@
     "./engine": {
       "import": "./dist/engine/index.js",
       "types": "./dist/engine/index.d.ts"
+    },
+    "./io": {
+      "import": "./dist/io/index.js",
+      "types": "./dist/io/index.d.ts"
     }
   },
   "files": [

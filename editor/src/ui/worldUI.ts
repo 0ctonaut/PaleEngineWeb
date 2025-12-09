@@ -1,6 +1,7 @@
 import { World } from '../engine';
 import {
     Toolbar,
+    BottomBar,
     WindowManager,
     Viewport,
     ProfilerPanel,
@@ -21,10 +22,11 @@ export interface WorldUI {
 interface Containers {
     toolbarContainer: HTMLElement;
     workspaceContainer: HTMLElement;
+    bottombarContainer: HTMLElement;
 }
 
 export function createWorldUI(containers: Containers): WorldUI {
-    const { workspaceContainer: sceneContainer, toolbarContainer } = containers;
+    const { workspaceContainer: sceneContainer, toolbarContainer, bottombarContainer } = containers;
 
     const windowManager = new WindowManager({ host: sceneContainer });
     const viewport = new Viewport();
@@ -33,6 +35,7 @@ export function createWorldUI(containers: Containers): WorldUI {
 
     let world: World | null = null;
     let toolbar: Toolbar | null = null;
+    let bottomBar: BottomBar | null = null;
     let panelsInitialized = false;
     const contextMenu = new WindowContextMenu(sceneContainer, windowManager);
     const handleContextMenu = (event: MouseEvent) => {
@@ -116,8 +119,12 @@ export function createWorldUI(containers: Containers): WorldUI {
             panelsInitialized = true;
         }
 
-        toolbar = new Toolbar(world.getCameraController());
+        toolbar = new Toolbar(world.getCameraController(), world);
         toolbarContainer.appendChild(toolbar.getElement());
+        
+        bottomBar = new BottomBar(world);
+        bottombarContainer.appendChild(bottomBar.getElement());
+        
         updateViewportSize();
     };
 
@@ -152,6 +159,11 @@ export function createWorldUI(containers: Containers): WorldUI {
                 toolbarElement.parentNode.removeChild(toolbarElement);
             }
             toolbar = null;
+        }
+
+        if (bottomBar) {
+            bottomBar.dispose();
+            bottomBar = null;
         }
 
         windowManager.dispose();
