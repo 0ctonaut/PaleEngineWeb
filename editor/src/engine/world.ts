@@ -23,6 +23,7 @@ import { OrbitCameraController } from './camera';
 import { ProcessorManager, SelectionProcessor, TransformProcessor, UndoRedoProcessor } from './processors';
 import { CommandManager } from './commands';
 import { PerformanceMonitor } from './profiler';
+import { TimeController } from './time-controller';
 
 export type HierarchyChangeType = 'refresh' | 'add' | 'remove';
 
@@ -86,6 +87,9 @@ export class World {
     
     // Animation controllers
     private animationControllers: AnimationController[] = [];
+    
+    // Time controller
+    private timeController!: TimeController;
 
     public constructor(container: HTMLElement) {
         this.container = container;
@@ -95,6 +99,9 @@ export class World {
         
         // Initialize performance monitor
         this.performanceMonitor = new PerformanceMonitor();
+        
+        // Initialize time controller
+        this.timeController = new TimeController();
         
         this.initializeInputSystem(container);
         this.initializeCameraController();
@@ -117,6 +124,9 @@ export class World {
         const deltaTime = this.calculateDeltaTime();
         this.performanceMonitor.update();
         this.processorManager.update(deltaTime);
+        
+        // Update time controller (which handles animation time synchronization)
+        this.timeController.update(deltaTime);
         
         // Update all animation controllers
         this.animationControllers.forEach(controller => {
@@ -327,6 +337,9 @@ export class World {
     public update(deltaTime: number): void {
         this.performanceMonitor.update();
         this.processorManager.update(deltaTime);
+        
+        // Update time controller (which handles animation time synchronization)
+        this.timeController.update(deltaTime);
         
         // Update all animation controllers
         this.animationControllers.forEach(controller => {
@@ -556,6 +569,7 @@ export class World {
     public registerAnimationController(controller: AnimationController): void {
         if (!this.animationControllers.includes(controller)) {
             this.animationControllers.push(controller);
+            this.timeController.registerAnimationController(controller);
         }
     }
 
@@ -566,6 +580,7 @@ export class World {
         const index = this.animationControllers.indexOf(controller);
         if (index > -1) {
             this.animationControllers.splice(index, 1);
+            this.timeController.unregisterAnimationController(controller);
         }
     }
 
@@ -580,40 +595,35 @@ export class World {
      * Play all animations
      */
     public playAllAnimations(): void {
-        this.animationControllers.forEach(controller => {
-            // 如果 timeScale === 0，说明之前播放过但被暂停了，使用 resume
-            // 否则使用 play（首次播放或已停止）
-            if (controller.getTimeScale() === 0) {
-                controller.resume();
-            } else {
-                controller.play();
-            }
-        });
+        this.timeController.play();
     }
 
     /**
      * Pause all animations
      */
     public pauseAllAnimations(): void {
-        this.animationControllers.forEach(controller => {
-            controller.pause();
-        });
+        this.timeController.pause();
     }
 
     /**
      * Resume all animations
      */
     public resumeAllAnimations(): void {
-        this.animationControllers.forEach(controller => {
-            controller.resume();
-        });
+        this.timeController.play();
     }
 
     /**
      * Check if any animation is playing
      */
     public isAnyAnimationPlaying(): boolean {
-        return this.animationControllers.some(controller => controller.isAnimating());
+        return this.timeController.getIsPlaying();
+    }
+
+    /**
+     * Get the TimeController instance
+     */
+    public getTimeController(): TimeController {
+        return this.timeController;
     }
 
     public on<K extends keyof WorldEventMap>(type: K, listener: (event: WorldEventMap[K]) => void): void {

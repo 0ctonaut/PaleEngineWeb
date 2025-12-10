@@ -66,6 +66,11 @@ function main(): void {
             
             world.update(deltaTime);
             
+            // Update UI components
+            if (worldUI) {
+                worldUI.update();
+            }
+            
             const bounds = viewportElement.getBoundingClientRect();
             const width = Math.max(bounds.width, 1);
             const height = Math.max(bounds.height, 1);

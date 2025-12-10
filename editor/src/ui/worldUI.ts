@@ -16,6 +16,7 @@ export interface WorldUI {
     viewportElement: HTMLElement;
     attachWorld: (world: World) => void;
     updateViewportSize: () => void;
+    update: () => void;
     dispose: () => void;
 }
 
@@ -150,6 +151,12 @@ export function createWorldUI(containers: Containers): WorldUI {
         }
     };
 
+    const update = () => {
+        if (bottomBar) {
+            bottomBar.update();
+        }
+    };
+
     const dispose = () => {
         contextMenu.dispose();
 
@@ -177,6 +184,7 @@ export function createWorldUI(containers: Containers): WorldUI {
         viewportElement,
         attachWorld,
         updateViewportSize,
+        update,
         dispose,
     };
 }

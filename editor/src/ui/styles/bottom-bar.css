@@ -4,24 +4,31 @@
   bottom: 0;
   left: 0;
   right: 0;
-  height: 40px;
+  height: var(--pe-bottombar-height);
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border-top: 1px solid rgba(0, 0, 0, 0.1);
   z-index: 1000;
   display: flex;
-  align-items: center;
-  padding: 0 16px;
+  flex-direction: column;
+  padding: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 12px;
   color: #333;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 .bottom-bar-controls {
   display: flex;
   gap: 8px;
   align-items: center;
+  padding: 8px 16px;
+  height: 40px;
+  flex-shrink: 0;
 }
 
 .bottom-bar-button {
@@ -52,4 +59,180 @@
 .play-pause-button {
   font-size: 16px;
   font-weight: 500;
+}
+
+/* Time range inputs */
+.time-range-label {
+  font-size: 12px;
+  color: #666;
+  margin-left: 8px;
+  margin-right: 4px;
+}
+
+.time-range-input {
+  width: 60px;
+  padding: 4px 8px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: rgba(255, 255, 255, 0.9);
+  color: #333;
+  transition: border-color 0.2s ease;
+}
+
+.time-range-input:focus {
+  outline: none;
+  border-color: rgba(0, 122, 255, 0.6);
+  background: rgba(255, 255, 255, 1);
+}
+
+.time-range-input.begin {
+  margin-right: 4px;
+}
+
+.time-range-input.fps {
+  margin-left: 8px;
+}
+
+.time-range-input.current-frame {
+  margin-left: 8px;
+  width: 70px;
+}
+
+/* Timeline styles */
+.timeline-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: rgba(240, 240, 240, 0.9);
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Controls row */
+.timeline-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 16px;
+  height: var(--pe-timeline-controls-height);
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.5);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.timeline-button {
+  background: transparent;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+}
+
+.timeline-button:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.timeline-button:active {
+  background: rgba(0, 0, 0, 0.1);
+  transform: scale(0.98);
+}
+
+.timeline-button.play-pause-button {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+/* Numbers bar */
+.timeline-numbers {
+  width: 100%;
+  height: var(--pe-timeline-numbers-height);
+  position: relative;
+  cursor: pointer;
+  background: rgba(250, 250, 250, 0.9);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  overflow: visible; /* Allow pointer to extend to ruler */
+}
+
+.timeline-range-bg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(0, 122, 255, 0.15);
+  pointer-events: none;
+  border-left: 1px solid rgba(0, 122, 255, 0.3);
+  border-right: 1px solid rgba(0, 122, 255, 0.3);
+}
+
+.timeline-pointer {
+  position: absolute;
+  top: 0;
+  height: calc(100% + var(--pe-timeline-ruler-height)); /* Extend to ruler */
+  width: 2px;
+  background: #ff0000;
+  pointer-events: auto;
+  z-index: 10;
+  transform: translateX(-50%);
+  cursor: ew-resize;
+}
+
+.timeline-pointer-label {
+  position: absolute;
+  top: 0px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ff0000;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 11;
+}
+
+.timeline-number-label {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #333;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 5;
+}
+
+.timeline-pointer.dragging {
+  cursor: ew-resize;
+}
+
+/* Ruler bar */
+.timeline-ruler-container {
+  width: 100%;
+  height: var(--pe-timeline-ruler-height);
+  position: relative;
+  flex-shrink: 0;
+  pointer-events: auto;
+  cursor: default;
+}
+
+.timeline-ruler {
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: auto;
+  cursor: default;
 }

@@ -156,8 +156,15 @@ export class AnimationController {
      * @param time - Time in seconds
      */
     public setTime(time: number): void {
-        //this.currentTime = time;
-        this.mixer.setTime(time);
+        // this.mixer.setTime(time);
+        this.animations.forEach((action) => {
+            if (!action.isScheduled()) {
+                action.play();
+                action.paused = true; // Pause immediately to prevent auto-advancement
+            }
+            action.time = time;
+        });
+        this.mixer.update(0);
     }
 
     /**

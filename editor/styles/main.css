@@ -1,5 +1,15 @@
  :root {
    --pe-toolbar-height: 40px;
+
+   --pe-timeline-controls-height: 20px;
+   --pe-timeline-numbers-height: 40px;
+   --pe-timeline-ruler-height: 50px;
+   
+   --pe-bottombar-height: calc(
+     var(--pe-timeline-controls-height) + 
+     var(--pe-timeline-numbers-height) + 
+     var(--pe-timeline-ruler-height)
+   );/* timeline-controls(40px) + timeline-numbers(20px) + timeline-ruler(50px) */
  }
 
 body {
@@ -29,9 +39,9 @@ h1 {
   /* tell our scene container to take up the full page */
   position: absolute;
   width: 100%;
-    height: calc(100% - var(--pe-toolbar-height));
-    top: var(--pe-toolbar-height); /* 为顶栏留出空间 */
-
+  height: calc(100% - var(--pe-toolbar-height) - var(--pe-bottombar-height));
+  top: var(--pe-toolbar-height); /* 为顶栏留出空间 */
+  
   /*
     Set the container's background color to the same as the scene's
     background to prevent flashing on load
