@@ -1,2 +1,2 @@
-export { loadGLB, loadGLBWithAnimations, type GLBLoadResult } from './gltf-loader';
+export { loadGLB, loadGLBWithAnimations, loadGLBWithAnimationsAsPaleObject, type GLBLoadResult, type GLBLoadResultWithPaleObject } from './gltf-loader';
 export { AnimationController, type AnimationInfo } from './animation-controller';

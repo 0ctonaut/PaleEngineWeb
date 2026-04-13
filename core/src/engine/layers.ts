@@ -5,7 +5,7 @@ export const Layers = {
   DEBUG: 11
 } as const;
 
-// Selection categories (stored in userData)
+// Tag categories (formerly stored in userData.selectionCategory, now stored in PaleObject.tag)
 export const SelectionCategory = {
   SCENE_OBJECT: 'scene_object',   // Can be selected
   UI_HELPER: 'ui_helper',         // Cannot be selected (gizmo, etc.)

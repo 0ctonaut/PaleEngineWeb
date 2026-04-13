@@ -4,7 +4,7 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 40px;
+  height: var(--pe-toolbar-height);
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -21,6 +21,19 @@
 .toolbar-buttons {
   display: flex;
   gap: 8px;
+  align-items: center;
+  width: 100%;
+  justify-content: space-between;
+}
+
+.toolbar-play-controls {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin: 0 auto;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .toolbar-menu-container {
@@ -96,4 +109,28 @@
 
 .toolbar-menu-item:active {
   background: rgba(0, 0, 0, 0.1);
+}
+
+/* Play control buttons */
+.toolbar-play-button,
+.toolbar-pause-button,
+.toolbar-stop-button {
+  font-size: 14px;
+  padding: 6px 10px;
+  min-width: 32px;
+}
+
+.toolbar-play-button:hover {
+  background: rgba(76, 175, 80, 0.1);
+  color: #4caf50;
+}
+
+.toolbar-pause-button:hover {
+  background: rgba(255, 152, 0, 0.1);
+  color: #ff9800;
+}
+
+.toolbar-stop-button:hover {
+  background: rgba(244, 67, 54, 0.1);
+  color: #f44336;
 }

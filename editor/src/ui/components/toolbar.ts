@@ -1,6 +1,6 @@
 import { CameraSettingsPopover } from './camera-settings-popover';
-import { World } from '../../engine';
-import { loadGLBWithAnimations, AnimationController } from '@paleengine/core';
+import { World, EditorMode } from '../../engine';
+import { loadGLBWithAnimationsAsPaleObject, AnimationController } from '@paleengine/core';
 
 export class Toolbar {
     private element!: HTMLElement;
@@ -8,6 +8,9 @@ export class Toolbar {
     private world: World;
     private fileMenu: HTMLElement | null = null;
     private fileButton: HTMLElement | null = null;
+    private playButton!: HTMLElement;
+    private pauseButton!: HTMLElement;
+    private stopButton!: HTMLElement;
 
     constructor(cameraController: any, world: World) {
         this.world = world;
@@ -50,6 +53,33 @@ export class Toolbar {
         fileMenuContainer.appendChild(this.fileMenu);
         buttonsContainer.appendChild(fileMenuContainer);
 
+        // Play controls container (in the middle)
+        const playControlsContainer = document.createElement('div');
+        playControlsContainer.className = 'toolbar-play-controls';
+        
+        // Play button
+        const playButton = document.createElement('button');
+        playButton.className = 'toolbar-button toolbar-play-button';
+        playButton.innerHTML = '▶️';
+        playButton.title = 'Play';
+        playControlsContainer.appendChild(playButton);
+        
+        // Pause button
+        const pauseButton = document.createElement('button');
+        pauseButton.className = 'toolbar-button toolbar-pause-button';
+        pauseButton.innerHTML = '⏸️';
+        pauseButton.title = 'Pause';
+        playControlsContainer.appendChild(pauseButton);
+        
+        // Stop button
+        const stopButton = document.createElement('button');
+        stopButton.className = 'toolbar-button toolbar-stop-button';
+        stopButton.innerHTML = '⏹️';
+        stopButton.title = 'Stop';
+        playControlsContainer.appendChild(stopButton);
+        
+        buttonsContainer.appendChild(playControlsContainer);
+
         // Camera button
         const cameraButton = document.createElement('button');
         cameraButton.className = 'toolbar-button';
@@ -57,6 +87,11 @@ export class Toolbar {
 
         buttonsContainer.appendChild(cameraButton);
         this.element.appendChild(buttonsContainer);
+        
+        // Store button references
+        this.playButton = playButton;
+        this.pauseButton = pauseButton;
+        this.stopButton = stopButton;
     }
 
     private bindEvents(): void {
@@ -78,12 +113,64 @@ export class Toolbar {
             }
         });
 
+        // Play control buttons
+        this.playButton.addEventListener('click', () => {
+            this.handlePlay();
+        });
+        
+        this.pauseButton.addEventListener('click', () => {
+            this.handlePause();
+        });
+        
+        this.stopButton.addEventListener('click', () => {
+            this.handleStop();
+        });
+        
+        // Update button states based on current mode
+        this.updatePlayButtonStates();
+        
+        // Listen to mode changes
+        this.world.getModeManager().onModeChange(() => {
+            this.updatePlayButtonStates();
+        });
+
         // Camera button
         const cameraButton = this.element.querySelector('.toolbar-button:last-child');
         if (cameraButton) {
             cameraButton.addEventListener('click', () => {
                 this.cameraPopover.toggleForAnchor(cameraButton as HTMLElement);
             });
+        }
+    }
+    
+    private handlePlay(): void {
+        this.world.enterGameMode();
+        this.updatePlayButtonStates();
+    }
+    
+    private handlePause(): void {
+        // Pause is not implemented yet, same as stop for now
+        this.handleStop();
+    }
+    
+    private handleStop(): void {
+        this.world.enterSceneMode();
+        this.updatePlayButtonStates();
+    }
+    
+    private updatePlayButtonStates(): void {
+        const mode = this.world.getModeManager().getCurrentMode();
+        const isGameMode = mode === EditorMode.Game;
+        
+        // Update button visibility/state
+        if (isGameMode) {
+            this.playButton.style.display = 'none';
+            this.pauseButton.style.display = 'inline-flex';
+            this.stopButton.style.display = 'inline-flex';
+        } else {
+            this.playButton.style.display = 'inline-flex';
+            this.pauseButton.style.display = 'none';
+            this.stopButton.style.display = 'none';
         }
     }
 
@@ -156,7 +243,7 @@ export class Toolbar {
                 const objectURL = URL.createObjectURL(file);
                 try {
                     // Try to load with animations first
-                    const { scene, animations } = await loadGLBWithAnimations(objectURL);
+                    const { scene, animations } = await loadGLBWithAnimationsAsPaleObject(objectURL);
                     
                     if (!scene.name || scene.name.trim().length === 0) {
                         scene.name = file.name.replace(/\.[^/.]+$/, ''); // Remove extension
@@ -164,7 +251,7 @@ export class Toolbar {
                     
                     // If there are animations, create and register AnimationController
                     if (animations && animations.length > 0) {
-                        const controller = new AnimationController(scene, animations);
+                        const controller = new AnimationController(scene.getThreeObject(), animations);
                         this.world.registerAnimationController(controller);
                     }
                     

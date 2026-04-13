@@ -748,8 +748,10 @@ export class HierarchyPanel extends Panel {
     }
 
     private shouldHide(object: Object3D): boolean {
-        const category = object.userData?.selectionCategory;
-        return category === SelectionCategory.UI_HELPER;
+        // 优先从 PaleObject 获取 tag
+        const paleObject = (object as any).__paleObject;
+        const tag = paleObject ? paleObject.tag : (object.userData?.selectionCategory);
+        return tag === SelectionCategory.UI_HELPER;
     }
 
     private findObjectByUuid(uuid: string): Object3D | Scene | null {

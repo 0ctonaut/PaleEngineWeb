@@ -1,4 +1,4 @@
-import { World } from '../engine';
+import { World, EditorMode } from '../engine';
 import {
     Toolbar,
     BottomBar,
@@ -13,7 +13,9 @@ import {
 export interface WorldUI {
     windowManager: WindowManager;
     viewport: Viewport;
+    gameViewport: Viewport;
     viewportElement: HTMLElement;
+    gameViewportElement: HTMLElement;
     attachWorld: (world: World) => void;
     updateViewportSize: () => void;
     update: () => void;
@@ -30,9 +32,14 @@ export function createWorldUI(containers: Containers): WorldUI {
     const { workspaceContainer: sceneContainer, toolbarContainer, bottombarContainer } = containers;
 
     const windowManager = new WindowManager({ host: sceneContainer });
-    const viewport = new Viewport();
+    const viewport = new Viewport('Scene');
     const viewportNode = windowManager.createInitialWindow(viewport);
     const viewportElement = viewport.getElement();
+    
+    // 创建 Game viewport 并添加到同一个 tab container
+    const gameViewport = new Viewport('Game');
+    const gameViewportNode = windowManager.stackWithSimple(viewportNode.id, gameViewport);
+    const gameViewportElement = gameViewport.getElement();
 
     let world: World | null = null;
     let toolbar: Toolbar | null = null;
@@ -55,6 +62,10 @@ export function createWorldUI(containers: Containers): WorldUI {
 
         const canvas = world.getRenderer().domElement;
         viewport.setCanvas(canvas);
+        
+        // Game viewport 使用单独的 renderer
+        const gameCanvas = world.getGameRenderer().domElement;
+        gameViewport.setCanvas(gameCanvas);
 
         if (!panelsInitialized) {
             const hierarchyPanel = new HierarchyPanel(world);
@@ -126,28 +137,50 @@ export function createWorldUI(containers: Containers): WorldUI {
         bottomBar = new BottomBar(world);
         bottombarContainer.appendChild(bottomBar.getElement());
         
+        // 监听模式切换，自动聚焦到对应的 viewport
+        world.getModeManager().onModeChange((event) => {
+            if (event.currentMode === EditorMode.Game) {
+                windowManager.activate(gameViewportNode.id);
+            } else {
+                windowManager.activate(viewportNode.id);
+            }
+        });
+        
         updateViewportSize();
     };
 
     const updateViewportSize = () => {
-        const bounds = viewportElement.getBoundingClientRect();
+        const sceneBounds = viewportElement.getBoundingClientRect();
+        const gameBounds = gameViewportElement.getBoundingClientRect();
 
         if (!world) {
             return;
         }
 
+        // 更新 Scene renderer
         const renderer = world.getRenderer();
-        renderer.setSize(bounds.width, bounds.height);
+        renderer.setSize(sceneBounds.width, sceneBounds.height);
         renderer.setPixelRatio(window.devicePixelRatio);
 
         const camera = world.getCamera();
-        const aspect = bounds.width / bounds.height;
-        camera.aspect = aspect;
+        const sceneAspect = sceneBounds.width / sceneBounds.height;
+        camera.aspect = sceneAspect;
         camera.updateProjectionMatrix();
+
+        // 更新 Game renderer
+        const gameRenderer = world.getGameRenderer();
+        gameRenderer.setSize(gameBounds.width, gameBounds.height);
+        gameRenderer.setPixelRatio(window.devicePixelRatio);
+
+        const mainCameraComponent = world.getMainCameraComponent();
+        if (mainCameraComponent) {
+            const gameAspect = gameBounds.width / gameBounds.height;
+            mainCameraComponent.aspect = gameAspect;
+        }
 
         const passManager = (world as any).passManager;
         if (passManager) {
-            passManager.setSize(bounds.width, bounds.height);
+            passManager.setSize(sceneBounds.width, sceneBounds.height);
         }
     };
 
@@ -181,7 +214,9 @@ export function createWorldUI(containers: Containers): WorldUI {
     return {
         windowManager,
         viewport,
+        gameViewport,
         viewportElement,
+        gameViewportElement,
         attachWorld,
         updateViewportSize,
         update,

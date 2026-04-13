@@ -2,6 +2,7 @@ import { Object3D, Raycaster, Vector2 } from 'three';
 import { InputProcessor } from './input-processor';
 import { EventTypes, InputEvent } from '../input';
 import { SelectionCategory } from '@paleengine/core';
+import { EditorMode } from '../mode-manager';
 
 export class SelectionProcessor extends InputProcessor {
     private mouseDownPosition: { x: number; y: number } | null = null;
@@ -18,11 +19,15 @@ export class SelectionProcessor extends InputProcessor {
     protected setupInputHandlers(): void {
         this.inputManager.on(EventTypes.MOUSE_DOWN, (event: InputEvent) => {
             if (!this.enabled) return;
+            // 在 Game 模式下禁用选择
+            if (this.world.getModeManager().getCurrentMode() === EditorMode.Game) return;
             this.handleMouseDown(event);
         });
 
         this.inputManager.on(EventTypes.MOUSE_UP, (event: InputEvent) => {
             if (!this.enabled) return;
+            // 在 Game 模式下禁用选择
+            if (this.world.getModeManager().getCurrentMode() === EditorMode.Game) return;
             this.handleMouseUp(event);
         });
     }
@@ -62,9 +67,11 @@ export class SelectionProcessor extends InputProcessor {
 
         // Find first selectable object (filter out UI helpers like gizmo)
         const selectableIntersect = intersects.find(intersect => {
-            const category = intersect.object.userData.selectionCategory;
-            // If no category set, default is selectable
-            return category === SelectionCategory.SCENE_OBJECT || !category;
+            // 优先从 PaleObject 获取 tag
+            const paleObject = (intersect.object as any).__paleObject;
+            const tag = paleObject ? paleObject.tag : (intersect.object.userData?.selectionCategory);
+            // If no tag set, default is selectable
+            return tag === SelectionCategory.SCENE_OBJECT || !tag;
         });
 
         if (selectableIntersect) {

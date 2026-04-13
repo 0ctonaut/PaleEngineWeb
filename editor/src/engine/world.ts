@@ -1,14 +1,16 @@
 import {
     createCamera,
-    createScene,
     createRenderer,
     createCube,
     createSphere,
     createLights,
     Resizer,
     SelectionCategory,
-    AnimationController
+    AnimationController,
+    PaleScene,
+    PaleObject
 } from '@paleengine/core';
+import { ComponentCamera } from '@paleengine/core';
 import { PerspectiveCamera, WebGPURenderer, Scene, Mesh, Color, Object3D, Group } from 'three/webgpu';
 import { LocalInputManager, InputContext, EventTypes, InputEvent } from './input';
 import {
@@ -24,6 +26,7 @@ import { ProcessorManager, SelectionProcessor, TransformProcessor, UndoRedoProce
 import { CommandManager } from './commands';
 import { PerformanceMonitor } from './profiler';
 import { TimeController } from './time-controller';
+import { ModeManager, EditorMode } from './mode-manager';
 
 export type HierarchyChangeType = 'refresh' | 'add' | 'remove';
 
@@ -42,7 +45,8 @@ export type WorldEventMap = {
 export class World {
     private readonly camera: PerspectiveCamera;
     private readonly renderer: WebGPURenderer;
-    private readonly scene: Scene;
+    private readonly gameRenderer: WebGPURenderer; // Game viewport 的 renderer
+    private readonly paleScene: PaleScene;
     private readonly meshes: Mesh[] = [];
     private animationId: number | null = null;
     private isDisposed: boolean = false;
@@ -56,6 +60,9 @@ export class World {
         selectionchange: new Set(),
         hierarchychange: new Set()
     };
+    
+    // Mode management
+    private modeManager!: ModeManager;
 
     public setContainer(container: HTMLElement): void {
         this.container = container;
@@ -90,12 +97,20 @@ export class World {
     
     // Time controller
     private timeController!: TimeController;
+    
+    // Main camera for Game mode
+    private mainCamera!: PaleObject;
+    private mainCameraComponent!: ComponentCamera;
 
     public constructor(container: HTMLElement) {
         this.container = container;
         this.camera = createCamera(75, 1, 0.1, 1000, [0, 0, 10]);
-        this.scene = createScene();
+        this.paleScene = new PaleScene();
         this.renderer = createRenderer();
+        this.gameRenderer = createRenderer(); // 为 Game viewport 创建单独的 renderer
+        
+        // Initialize mode manager
+        this.modeManager = new ModeManager();
         
         // Initialize performance monitor
         this.performanceMonitor = new PerformanceMonitor();
@@ -202,90 +217,154 @@ export class World {
             }
         }
         
-        this.scene.clear();
+        this.paleScene.clear();
     }
 
     public addMesh(mesh: Mesh): void {
-        this.scene.add(mesh);
-        this.meshes.push(mesh);
-        this.emitHierarchyChange('add', { object: mesh, parent: mesh.parent ?? null });
+        // 兼容旧代码：将 Mesh 包装为 PaleObject
+        const paleObject = new PaleObject(mesh, mesh.name);
+        this.addObject(paleObject);
     }
 
-    public addObject(object: Object3D): void {
-        this.scene.add(object);
+    public addObject(object: PaleObject | Object3D): void {
+        let paleObject: PaleObject;
         
-        // Set selection category
-        if (!object.userData.selectionCategory) {
-            object.userData.selectionCategory = SelectionCategory.SCENE_OBJECT;
+        if (object instanceof PaleObject) {
+            paleObject = object;
+        } else {
+            // 兼容旧代码：将 Object3D 包装为 PaleObject
+            paleObject = new PaleObject(object, object.name);
+        }
+        
+        const threeObject = paleObject.getThreeObject();
+        
+        // Set tag (如果还没有设置)
+        if (paleObject.tag === null) {
+            paleObject.tag = SelectionCategory.SCENE_OBJECT;
         }
         
         // If object is a Mesh, add to meshes array
-        if (object instanceof Mesh) {
-            this.meshes.push(object);
+        if (threeObject instanceof Mesh) {
+            this.meshes.push(threeObject);
         }
         
         // If object is a Group, traverse and collect all Meshes
-        if (object instanceof Group) {
-            object.traverse((child) => {
+        if (threeObject instanceof Group) {
+            threeObject.traverse((child) => {
                 if (child instanceof Mesh) {
                     this.meshes.push(child);
                 }
-                if (!child.userData.selectionCategory) {
+                // 为子对象设置 tag（如果还没有 PaleObject 包装）
+                const childPaleObject = (child as any).__paleObject;
+                if (childPaleObject) {
+                    if (childPaleObject.tag === null) {
+                        childPaleObject.tag = SelectionCategory.SCENE_OBJECT;
+                    }
+                } else if (!child.userData.selectionCategory) {
+                    // 向后兼容：如果子对象没有 PaleObject 包装，直接设置 userData
                     child.userData.selectionCategory = SelectionCategory.SCENE_OBJECT;
                 }
             });
         }
         
-        this.emitHierarchyChange('add', { object, parent: object.parent ?? null });
+        // 添加到 PaleScene（会自动注册组件）
+        this.paleScene.add(paleObject);
+        
+        this.emitHierarchyChange('add', { object: threeObject, parent: threeObject.parent ?? null });
     }
 
     public removeMesh(mesh: Mesh): void {
-        const parent = mesh.parent ?? null;
-        this.scene.remove(mesh);
-        const index = this.meshes.indexOf(mesh);
-        if (index > -1) {
-            this.meshes.splice(index, 1);
-        }
+        // 查找对应的 PaleObject
+        const paleObject = (mesh as any).__paleObject;
+        if (paleObject) {
+            this.removeObject(paleObject);
+        } else {
+            // 如果没有 PaleObject 包装，直接移除
+            const parent = mesh.parent ?? null;
+            this.paleScene.getThreeScene().remove(mesh);
+            const index = this.meshes.indexOf(mesh);
+            if (index > -1) {
+                this.meshes.splice(index, 1);
+            }
 
-        if (this.selectedObject === mesh) {
+            if (this.selectedObject === mesh) {
+                this.setSelectedObject(null);
+            }
+
+            this.emitHierarchyChange('remove', { object: mesh, parent });
+        }
+    }
+    
+    public removeObject(object: PaleObject): void {
+        const threeObject = object.getThreeObject();
+        const parent = threeObject.parent ?? null;
+        
+        // 从 PaleScene 移除（会自动注销组件）
+        this.paleScene.remove(object);
+        
+        // 从 meshes 数组移除
+        if (threeObject instanceof Mesh) {
+            const index = this.meshes.indexOf(threeObject);
+            if (index > -1) {
+                this.meshes.splice(index, 1);
+            }
+        }
+        
+        // 如果是选中的对象，清除选择
+        if (this.selectedObject === threeObject) {
             this.setSelectedObject(null);
         }
 
-        this.emitHierarchyChange('remove', { object: mesh, parent });
+        this.emitHierarchyChange('remove', { object: threeObject, parent });
     }
 
-    public createPrimitive(type: 'cube' | 'sphere', parent?: Object3D | null): Object3D {
-        let object: Object3D;
-
+    public createPrimitive(type: 'cube' | 'sphere', parent?: PaleObject | Object3D | null): PaleObject {
+        let paleObject: PaleObject;
         switch (type) {
             case 'sphere':
-                object = createSphere();
+                paleObject = createSphere();
                 break;
             case 'cube':
-                object = createCube();
+                paleObject = createCube();
                 break;
             default:
                 throw new Error(`Unknown primitive type: ${type}`);
         }
 
-        const targetParent = parent ?? this.scene;
-        targetParent.add(object);
-
-        if (!object.name || object.name.trim().length === 0) {
-            object.name = this.generatePrimitiveName(type);
+        if (!paleObject.name || paleObject.name.trim().length === 0) {
+            paleObject.name = this.generatePrimitiveName(type);
         }
 
-        if (object instanceof Mesh) {
-            this.meshes.push(object);
+        const threeObject = paleObject.getThreeObject();
+        if (threeObject instanceof Mesh) {
+            this.meshes.push(threeObject);
         }
 
-        if (!object.userData.selectionCategory) {
-            object.userData.selectionCategory = SelectionCategory.SCENE_OBJECT;
+        // Set tag (如果还没有设置)
+        if (paleObject.tag === null) {
+            paleObject.tag = SelectionCategory.SCENE_OBJECT;
         }
 
-        this.emitHierarchyChange('add', { object, parent: targetParent });
-        this.setSelectedObject(object);
-        return object;
+        // 处理父对象
+        if (parent) {
+            if (parent instanceof PaleObject) {
+                parent.add(paleObject);
+            } else {
+                // 兼容旧代码：直接添加到 Three.js 场景
+                const parentPaleObject = (parent as any).__paleObject;
+                if (parentPaleObject) {
+                    parentPaleObject.add(paleObject);
+                } else {
+                    this.paleScene.getThreeScene().add(threeObject);
+                }
+            }
+        } else {
+            this.addObject(paleObject);
+        }
+
+        this.emitHierarchyChange('add', { object: threeObject, parent: threeObject.parent ?? null });
+        this.setSelectedObject(threeObject);
+        return paleObject;
     }
 
     private generatePrimitiveName(type: 'cube' | 'sphere'): string {
@@ -297,25 +376,34 @@ export class World {
         // Enable all layers for editor camera to see everything
         this.camera.layers.enableAll();
         
+        // 创建 MainCamera
+        const mainCameraObject = new PaleObject(new Object3D(), 'MainCamera');
+        mainCameraObject.position.set(0, 0, 10);
+        this.mainCameraComponent = new ComponentCamera(75, 1, 0.1, 1000, [0, 0, 10]);
+        mainCameraObject.addComponent(this.mainCameraComponent);
+        this.mainCamera = mainCameraObject;
+        this.addObject(mainCameraObject);
+        // MainCamera 不添加到场景中，它是独立的游戏对象
+        
         const cube = createCube();
         cube.position.set(-2, 0, 0);
         cube.name = 'Example-Cube';
-        this.addMesh(cube);
+        this.addObject(cube);
 
         const sphere = createSphere(1, 8, 'orange');
         sphere.position.set(2, 0, 0);
         sphere.name = 'Example-Sphere';
-        this.addMesh(sphere);
+        this.addObject(sphere);
 
         const floor = createCube([10, 1, 10], 'gray');
         floor.position.set(0, -2, 0);
         floor.name = 'Example-Floor';
-        this.scene.add(floor);
+        this.addObject(floor);
 
         const light = createLights();
         light.position.set(10, 10, 10);
         light.name = 'Example-Light';
-        this.scene.add(light);
+        this.addObject(light);
 
         this.emitHierarchyChange('refresh');
     }
@@ -336,7 +424,22 @@ export class World {
      */
     public update(deltaTime: number): void {
         this.performanceMonitor.update();
-        this.processorManager.update(deltaTime);
+        
+        const currentMode = this.modeManager.getCurrentMode();
+        
+        if (currentMode === EditorMode.Scene) {
+            // Scene 模式：执行编辑器处理器
+            this.processorManager.update(deltaTime);
+        } else {
+            // Game 模式：执行组件系统更新
+            this.paleScene.update(deltaTime);
+        }
+        
+        // 无论什么模式，都同步 MainCamera 的变换到相机
+        // 这样在 Scene 模式下，如果 MainCamera 的 position 被修改，相机也会同步更新
+        if (this.mainCameraComponent) {
+            this.mainCameraComponent.syncTransform();
+        }
         
         // Update time controller (which handles animation time synchronization)
         this.timeController.update(deltaTime);
@@ -347,15 +450,40 @@ export class World {
         });
     }
     
-    public async render(width: number, height: number, gizmoSize?: number): Promise<void> {
-        this.cameraController.update();
+    public async render(width: number, height: number, gizmoSize?: number, useGameCamera: boolean = false): Promise<void> {
+        const currentMode = this.modeManager.getCurrentMode();
+        const targetRenderer = useGameCamera ? this.gameRenderer : this.renderer;
         
-        if (gizmoSize !== undefined && this.viewHelperGizmoPass) {
-            this.viewHelperGizmoPass.setGizmoSize(gizmoSize);
+        if (currentMode === EditorMode.Scene && !useGameCamera) {
+            // Scene 模式：更新相机控制器和 gizmo
+            this.cameraController.update();
+            
+            if (gizmoSize !== undefined && this.viewHelperGizmoPass) {
+                this.viewHelperGizmoPass.setGizmoSize(gizmoSize);
+            }
+        }
+        // Game 模式：相机控制器由游戏逻辑控制，不更新编辑器相机控制器
+        
+        // 根据模式选择相机
+        let targetCamera: PerspectiveCamera;
+        if (useGameCamera && this.mainCameraComponent) {
+            // 更新 MainCamera 的 aspect
+            const aspect = width / height;
+            this.mainCameraComponent.aspect = aspect;
+            targetCamera = this.mainCameraComponent.camera;
+        } else {
+            targetCamera = this.camera;
         }
         
-        this.renderer.setViewport(0, 0, width, height);
-        await this.passManager.render(this.renderer, this.scene, this.camera);
+        targetRenderer.setViewport(0, 0, width, height);
+        await this.passManager.render(targetRenderer, this.paleScene.getThreeScene(), targetCamera);
+    }
+    
+    /**
+     * 获取 Game renderer
+     */
+    public getGameRenderer(): WebGPURenderer {
+        return this.gameRenderer;
     }
     
     private async renderInternal(): Promise<void> {
@@ -430,7 +558,7 @@ export class World {
     private initializePassSystem(): void {
         this.passManager = new PassManager();
 
-        this.sceneRenderPass = new SceneRenderPass(this.scene, this.camera, true);
+        this.sceneRenderPass = new SceneRenderPass(this.paleScene.getThreeScene(), this.camera, true);
         // outline remain bugs
         // const outlineConfig: OutlineConfig = {
         //     color: new Color(0x00ff00),
@@ -524,7 +652,106 @@ export class World {
     }
 
     public getScene(): Scene {
-        return this.scene;
+        return this.paleScene.getThreeScene();
+    }
+    
+    public getPaleScene(): PaleScene {
+        return this.paleScene;
+    }
+    
+    public getModeManager(): ModeManager {
+        return this.modeManager;
+    }
+    
+    /**
+     * 进入 Game 模式
+     */
+    public enterGameMode(): void {
+        // 保存编辑器状态
+        this.modeManager.saveState({
+            selectedObject: this.selectedObject,
+            cameraPosition: {
+                x: this.camera.position.x,
+                y: this.camera.position.y,
+                z: this.camera.position.z
+            },
+            cameraRotation: {
+                x: this.camera.rotation.x,
+                y: this.camera.rotation.y,
+                z: this.camera.rotation.z
+            }
+        });
+        
+        // 禁用编辑器处理器
+        this.selectionProcessor.disable();
+        this.transformProcessor.disable();
+        
+        // 清除选择
+        this.setSelectedObject(null);
+        
+        // 重置组件系统（准备重新开始）
+        this.paleScene.reset();
+        
+        // 注册 MainCamera 的组件
+        const mainCameraComponents = this.mainCamera.getAllComponents();
+        for (const component of mainCameraComponents) {
+            this.paleScene.getComponentManager().registerComponent(component);
+        }
+        
+        // 重新注册所有场景对象的组件（触发 Awake）
+        const objects = this.paleScene.getObjects();
+        for (const object of objects) {
+            const components = object.getAllComponents();
+            for (const component of components) {
+                this.paleScene.getComponentManager().registerComponent(component);
+            }
+            // 递归处理子对象
+            object.traverse((child) => {
+                if (child !== object) {
+                    const childComponents = child.getAllComponents();
+                    for (const component of childComponents) {
+                        this.paleScene.getComponentManager().registerComponent(component);
+                    }
+                }
+            });
+        }
+        
+        // 切换到 Game 模式
+        this.modeManager.enterGameMode();
+    }
+    
+    /**
+     * 进入 Scene 模式
+     */
+    public enterSceneMode(): void {
+        // 切换到 Scene 模式
+        this.modeManager.enterSceneMode();
+        
+        // 恢复编辑器状态
+        const savedState = this.modeManager.restoreState();
+        if (savedState) {
+            if (savedState.selectedObject) {
+                this.setSelectedObject(savedState.selectedObject);
+            }
+            if (savedState.cameraPosition) {
+                this.camera.position.set(
+                    savedState.cameraPosition.x,
+                    savedState.cameraPosition.y,
+                    savedState.cameraPosition.z
+                );
+            }
+            if (savedState.cameraRotation) {
+                this.camera.rotation.set(
+                    savedState.cameraRotation.x,
+                    savedState.cameraRotation.y,
+                    savedState.cameraRotation.z
+                );
+            }
+        }
+        
+        // 启用编辑器处理器
+        this.selectionProcessor.enable();
+        this.transformProcessor.enable();
     }
 
     public getRenderer(): WebGPURenderer {
@@ -625,6 +852,20 @@ export class World {
     public getTimeController(): TimeController {
         return this.timeController;
     }
+    
+    /**
+     * 获取 MainCamera
+     */
+    public getMainCamera(): PaleObject {
+        return this.mainCamera;
+    }
+    
+    /**
+     * 获取 MainCamera 的 ComponentCamera 组件
+     */
+    public getMainCameraComponent(): ComponentCamera {
+        return this.mainCameraComponent;
+    }
 
     public on<K extends keyof WorldEventMap>(type: K, listener: (event: WorldEventMap[K]) => void): void {
         this.eventListeners[type].add(listener);
@@ -650,7 +891,7 @@ export class World {
 
     private emitHierarchyChange(type: HierarchyChangeType, payload: { object?: Object3D | null; parent?: Object3D | null } = {}): void {
         this.emit('hierarchychange', {
-            scene: this.scene,
+            scene: this.paleScene.getThreeScene(),
             type,
             object: payload.object ?? null,
             parent: payload.parent ?? null

@@ -41,7 +41,7 @@ function main(): void {
         }
         
         worldUI = createWorldUI({ workspaceContainer: container, toolbarContainer, bottombarContainer });
-        const { viewportElement, windowManager } = worldUI;
+        const { viewportElement, gameViewportElement, windowManager } = worldUI;
 
         world = new World(viewportElement);
         (window as any).world = world;
@@ -71,11 +71,18 @@ function main(): void {
                 worldUI.update();
             }
             
-            const bounds = viewportElement.getBoundingClientRect();
-            const width = Math.max(bounds.width, 1);
-            const height = Math.max(bounds.height, 1);
-            const gizmoSize = Math.floor(0.2 * Math.min(width, height));
-            await world.render(width, height, gizmoSize);
+            // 渲染 Scene viewport
+            const sceneBounds = viewportElement.getBoundingClientRect();
+            const sceneWidth = Math.max(sceneBounds.width, 1);
+            const sceneHeight = Math.max(sceneBounds.height, 1);
+            const gizmoSize = Math.floor(0.2 * Math.min(sceneWidth, sceneHeight));
+            await world.render(sceneWidth, sceneHeight, gizmoSize, false);
+            
+            // 渲染 Game viewport（使用 MainCamera）
+            const gameBounds = gameViewportElement.getBoundingClientRect();
+            const gameWidth = Math.max(gameBounds.width, 1);
+            const gameHeight = Math.max(gameBounds.height, 1);
+            await world.render(gameWidth, gameHeight, undefined, true);
             
             requestAnimationFrame(renderLoop);
         };
@@ -92,6 +99,7 @@ function main(): void {
             }
         });
         resizeObserver.observe(viewportElement);
+        resizeObserver.observe(gameViewportElement);
         
         console.log('PaleEngine Editor initialized successfully');
         

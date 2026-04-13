@@ -1,6 +1,7 @@
 import { GLTFLoader as ThreeGLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Object3D, AnimationClip } from 'three/webgpu';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { PaleObject } from '../engine';
 
 /**
  * Load a GLB model from the given URL
@@ -40,6 +41,14 @@ export interface GLBLoadResult {
 }
 
 /**
+ * Load result containing PaleObject scene and animations
+ */
+export interface GLBLoadResultWithPaleObject {
+    scene: PaleObject;
+    animations: AnimationClip[];
+}
+
+/**
  * Load a GLB model with animations from the given URL
  *
  * @param url - The URL or path to the GLB file
@@ -67,5 +76,26 @@ export function loadGLBWithAnimations(
                 reject(error);
             }
         );
+    });
+}
+
+/**
+ * Load a GLB model with animations and return as PaleObject
+ *
+ * @param url - The URL or path to the GLB file
+ * @param onProgress - Optional progress callback function
+ * @returns A Promise that resolves to an object containing the PaleObject scene root and animations array
+ * @throws Rejects with an error if loading fails
+ */
+export function loadGLBWithAnimationsAsPaleObject(
+    url: string,
+    onProgress?: (progress: ProgressEvent) => void
+): Promise<GLBLoadResultWithPaleObject> {
+    return loadGLBWithAnimations(url, onProgress).then(result => {
+        const paleObject = new PaleObject(result.scene, result.scene.name || 'GLBModel');
+        return {
+            scene: paleObject,
+            animations: result.animations
+        };
     });
 }

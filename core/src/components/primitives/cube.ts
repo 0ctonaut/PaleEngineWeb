@@ -4,7 +4,7 @@ import {
     Mesh, 
     MeshStandardMaterial 
 } from 'three/webgpu';
-import { Layers, SelectionCategory } from '../../engine';
+import { Layers, SelectionCategory, PaleObject } from '../../engine';
 
 
 export type CubeSize = number | [number, number, number];
@@ -13,7 +13,7 @@ export function createCube(
     size: CubeSize = [1, 1, 1], 
     color: string = 'white',
     layer: number = Layers.DEFAULT
-): Mesh {
+): PaleObject {
     const dimensions = _normalizeDimensions(size);
     const geometry = new BoxGeometry(...dimensions);
     const material = new MeshStandardMaterial({ color });
@@ -22,10 +22,11 @@ export function createCube(
     // Set rendering layer
     mesh.layers.set(layer);
     
-    // Mark as selectable scene object
-    mesh.userData.selectionCategory = SelectionCategory.SCENE_OBJECT;
-    
-    return mesh;
+    // 包装为 PaleObject
+    const paleObject = new PaleObject(mesh, 'Cube');
+    // 设置 tag
+    paleObject.tag = SelectionCategory.SCENE_OBJECT;
+    return paleObject;
 }
 
 export function createSphere(
@@ -33,7 +34,7 @@ export function createSphere(
     segments: number = 32,
     color: string = 'white',
     layer: number = Layers.DEFAULT
-): Mesh {
+): PaleObject {
     // Parameter validation
     if (radius <= 0) {
         console.warn('Sphere radius must be positive, using default value 1');
@@ -52,10 +53,11 @@ export function createSphere(
     // Set rendering layer
     mesh.layers.set(layer);
     
-    // Mark as selectable scene object
-    mesh.userData.selectionCategory = SelectionCategory.SCENE_OBJECT;
-    
-    return mesh;
+    // 包装为 PaleObject
+    const paleObject = new PaleObject(mesh, 'Sphere');
+    // 设置 tag
+    paleObject.tag = SelectionCategory.SCENE_OBJECT;
+    return paleObject;
 }
 
 function _normalizeDimensions(size: CubeSize): [number, number, number] {

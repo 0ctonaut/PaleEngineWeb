@@ -4,6 +4,7 @@ import { InputProcessor } from './input-processor';
 import { EventTypes, InputEvent, Keys } from '../input';
 import { TransformCommand, TransformState } from '../commands';
 import { Layers, SelectionCategory } from '@paleengine/core';
+import { EditorMode } from '../mode-manager';
 
 export class TransformProcessor extends InputProcessor {
   private controls: TransformControls;
@@ -98,6 +99,14 @@ export class TransformProcessor extends InputProcessor {
   }
 
   public update(_deltaTime: number): void {
+    // 在 Game 模式下禁用变换控件
+    if (this.world.getModeManager().getCurrentMode() === EditorMode.Game) {
+      if (this.currentAttachment) {
+        this.updateAttachment(null);
+      }
+      return;
+    }
+    
     // Check for selection changes and update attachment
     const selectedObject = this.world.getSelectedObject();
     if (selectedObject !== this.currentAttachment) {

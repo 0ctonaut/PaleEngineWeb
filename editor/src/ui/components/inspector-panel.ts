@@ -1,7 +1,7 @@
 import { Panel } from '../window/window';
 import { World, WorldEventMap } from '../../engine';
 import { Object3D, Scene } from 'three/webgpu';
-import { Layers, SelectionCategory } from '@paleengine/core';
+import { Layers, SelectionCategory, PaleObject } from '@paleengine/core';
 
 type LayerEntry = [string, number];
 type TransformType = 'position' | 'rotation' | 'scale';
@@ -15,7 +15,9 @@ export class InspectorPanel extends Panel {
     private enableCheckbox!: HTMLInputElement;
     private nameInput!: HTMLInputElement;
     private layerSelect!: HTMLSelectElement;
+    private tagSelect!: HTMLSelectElement;
     private currentObject: Object3D | null = null;
+    private currentPaleObject: PaleObject | null = null;
     private transformSection!: HTMLElement;
     private transformContent!: HTMLElement;
     private transformInputs: Record<TransformType, Record<Axis, HTMLInputElement>> = {
@@ -134,6 +136,22 @@ export class InspectorPanel extends Panel {
         });
         this.secondaryRow.appendChild(this.layerSelect);
 
+        // Tag label and select
+        const tagLabel = document.createElement('label');
+        tagLabel.className = 'inspector-panel__label';
+        tagLabel.textContent = 'Tag';
+        tagLabel.htmlFor = 'inspector-tag-select';
+        this.secondaryRow.appendChild(tagLabel);
+
+        this.tagSelect = document.createElement('select');
+        this.tagSelect.id = 'inspector-tag-select';
+        this.tagSelect.className = 'inspector-panel__tag-select';
+        this.populateTagOptions();
+        this.tagSelect.addEventListener('change', () => {
+            this.commitTagChange();
+        });
+        this.secondaryRow.appendChild(this.tagSelect);
+
         this.panelContainer.appendChild(this.headerRow);
         this.panelContainer.appendChild(this.secondaryRow);
 
@@ -160,17 +178,20 @@ export class InspectorPanel extends Panel {
         }
 
         this.currentObject = object;
+        // 获取对应的 PaleObject
+        this.currentPaleObject = object ? ((object as any).__paleObject || null) : null;
         this.setControlsEnabled(Boolean(object));
         this.populateControls(object);
     }
 
     private populateControls(object: Object3D | null): void {
-        if (!this.nameInput || !this.layerSelect || !this.enableCheckbox) {
+        if (!this.nameInput || !this.layerSelect || !this.enableCheckbox || !this.tagSelect) {
             return;
         }
         if (!object) {
             this.nameInput.value = '';
             this.layerSelect.value = '';
+            this.tagSelect.value = '';
             this.enableCheckbox.checked = false;
             this.populateTransformControls(null);
             return;
@@ -179,6 +200,12 @@ export class InspectorPanel extends Panel {
         this.nameInput.value = this.getDisplayName(object);
         this.layerSelect.value = object.layers.mask.toString();
         this.enableCheckbox.checked = object.visible;
+        
+        // 填充 tag
+        const paleObject = (object as any).__paleObject;
+        const tag = paleObject ? paleObject.tag : (object.userData?.selectionCategory);
+        this.tagSelect.value = tag || '';
+        
         this.populateTransformControls(object);
     }
 
@@ -216,6 +243,26 @@ export class InspectorPanel extends Panel {
         this.currentObject.layers.set(newLayer);
     }
 
+    private commitTagChange(): void {
+        if (!this.currentObject || !this.tagSelect) {
+            return;
+        }
+
+        const newTag = this.tagSelect.value;
+        
+        // 优先更新 PaleObject 的 tag
+        if (this.currentPaleObject) {
+            this.currentPaleObject.tag = newTag ? (newTag as any) : null;
+        } else {
+            // 向后兼容：如果没有 PaleObject 包装，直接更新 userData
+            if (newTag) {
+                this.currentObject.userData.selectionCategory = newTag;
+            } else {
+                delete this.currentObject.userData.selectionCategory;
+            }
+        }
+    }
+
     private populateLayerOptions(): void {
         if (!this.layerSelect) {
             return;
@@ -231,12 +278,35 @@ export class InspectorPanel extends Panel {
         });
     }
 
+    private populateTagOptions(): void {
+        if (!this.tagSelect) {
+            return;
+        }
+        this.tagSelect.innerHTML = '';
+
+        // 添加空选项（None）
+        const noneOption = document.createElement('option');
+        noneOption.value = '';
+        noneOption.textContent = 'None';
+        this.tagSelect.appendChild(noneOption);
+
+        // 添加所有 SelectionCategory 选项
+        const entries = Object.entries(SelectionCategory);
+        entries.forEach(([name, value]) => {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = name;
+            this.tagSelect.appendChild(option);
+        });
+    }
+
     private setControlsEnabled(enabled: boolean): void {
-        if (!this.nameInput || !this.layerSelect || !this.enableCheckbox) {
+        if (!this.nameInput || !this.layerSelect || !this.enableCheckbox || !this.tagSelect) {
             return;
         }
         this.nameInput.disabled = !enabled;
         this.layerSelect.disabled = !enabled;
+        this.tagSelect.disabled = !enabled;
         // Intentionally keep checkbox disabled (placeholder)
         this.setTransformEnabled(enabled);
     }
@@ -252,8 +322,10 @@ export class InspectorPanel extends Panel {
     }
 
     private shouldHide(object: Object3D): boolean {
-        const category = object.userData?.selectionCategory;
-        return category === SelectionCategory.UI_HELPER;
+        // 优先从 PaleObject 获取 tag
+        const paleObject = (object as any).__paleObject;
+        const tag = paleObject ? paleObject.tag : (object.userData?.selectionCategory);
+        return tag === SelectionCategory.UI_HELPER;
     }
 
     private isSceneRoot(object: Object3D): boolean {
