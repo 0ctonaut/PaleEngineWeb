@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import {
     createCamera,
     createRenderer,
@@ -556,10 +557,10 @@ export class World {
         const scene = this.paleScene.getThreeScene();
         try {
             console.log('Loading HDR skybox...');
-            
-            // 加载 HDR 天空盒 - r180 使用 HDRLoader 替代 RGBELoader
+
             const hdrLoader = new HDRLoader();
-            const texture = await hdrLoader.loadAsync('/assets/skyboxes/qwantani_moon_noon_puresky_1k.hdr');
+            const baseUrl = import.meta.env.BASE_URL;
+            const texture = await hdrLoader.loadAsync(`${baseUrl}assets/skyboxes/qwantani_moon_noon_puresky_1k.hdr`.replace(/\/+/g, '/'));
             // 设置纹理映射方式
             texture.mapping = EquirectangularReflectionMapping;
 
