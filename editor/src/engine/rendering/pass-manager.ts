@@ -1,5 +1,6 @@
-import { WebGPURenderer, Scene, Camera } from 'three/webgpu';
+import { Scene, Camera } from 'three/webgpu';
 import { RenderPass } from './pass';
+import { Renderer } from './renderer';
 
 export class PassManager {
     private passes: Array<{ name: string; pass: RenderPass }> = [];
@@ -47,23 +48,23 @@ export class PassManager {
         }
     }
 
-    public async render(renderer: WebGPURenderer, scene?: Scene, camera?: Camera): Promise<void> {
+    public async render(renderer: Renderer, scene?: Scene, camera?: Camera): Promise<void> {
         renderer.setClearColor(0x000000, 0.0);
-        const originalAutoClearColor = renderer.autoClearColor;
-        
+        const originalAutoClear = renderer.autoClear;
+
         for (const { pass } of this.passes) {
             if (pass.isEnabled()) {
-                renderer.autoClearColor = pass.shouldClear();
+                renderer.autoClear = pass.shouldClear();
                 await pass.render(renderer, scene, camera);
             }
         }
-        renderer.autoClearColor = originalAutoClearColor;
+        renderer.autoClear = originalAutoClear;
     }
 
     public setSize(width: number, height: number): void {
         this.width = width;
         this.height = height;
-        
+
         for (const { pass } of this.passes) {
             pass.setSize(width, height);
         }
@@ -80,4 +81,3 @@ export class PassManager {
         return this.passes.map(p => p.name);
     }
 }
-

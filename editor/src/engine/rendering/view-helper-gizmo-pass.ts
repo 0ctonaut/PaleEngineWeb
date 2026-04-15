@@ -1,6 +1,7 @@
-import { WebGPURenderer, Scene, Camera, PerspectiveCamera } from 'three/webgpu';
+import { Scene, Camera, PerspectiveCamera } from 'three/webgpu';
 import { ViewHelperGizmo, ViewDirection } from './view-helper-gizmo';
 import { RenderPass } from './pass';
+import { Renderer } from './renderer';
 
 export interface ViewHelperGizmoPassConfig {
     padding?: number;
@@ -23,7 +24,7 @@ export class ViewHelperGizmoPass implements RenderPass {
             padding: config.padding ?? 20,
             alignment: config.alignment ?? 'top-right'
         };
-        
+
         this.gizmo = new ViewHelperGizmo({
             size: 0.5,
             axisColors: {
@@ -33,12 +34,12 @@ export class ViewHelperGizmoPass implements RenderPass {
             }
         });
     }
-    
+
     public setGizmoSize(size: number): void {
         this.gizmoSize = size;
     }
 
-    public async render(renderer: WebGPURenderer, _scene?: Scene, _camera?: Camera): Promise<void> {
+    public async render(renderer: Renderer, _scene?: Scene, _camera?: Camera): Promise<void> {
         if (!this.enabled) {
             return;
         }
@@ -56,7 +57,7 @@ export class ViewHelperGizmoPass implements RenderPass {
         renderer.setScissorTest(true);
         renderer.setScissor(x, y, this.gizmoSize, this.gizmoSize);
         renderer.setViewport(x, y, this.gizmoSize, this.gizmoSize);
-        await this.gizmo.render(renderer);
+        await this.gizmo.render(renderer.getWebGPURenderer());
         renderer.setScissorTest(false);
         renderer.setViewport(0, 0, this.width, this.height);
         renderer.setScissor(0, 0, this.width, this.height);
@@ -162,4 +163,3 @@ export class ViewHelperGizmoPass implements RenderPass {
         this.gizmo.dispose();
     }
 }
-

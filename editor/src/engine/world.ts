@@ -8,17 +8,17 @@ import {
     SelectionCategory,
     AnimationController,
     PaleScene,
-    PaleObject
+    PaleObject,
+    ComponentCamera
 } from '@paleengine/core';
-import { ComponentCamera } from '@paleengine/core';
-import { PerspectiveCamera, WebGPURenderer, Scene, Mesh, Color, Object3D, Group } from 'three/webgpu';
+import { PerspectiveCamera, WebGPURenderer, Scene, Mesh, Object3D, Group } from 'three/webgpu';
 import { LocalInputManager, InputContext, EventTypes, InputEvent } from './input';
 import {
-    OutlineRenderer,
-    OutlineConfig,
     PassManager,
     SceneRenderPass,
-    ViewHelperGizmoPass
+    ViewHelperGizmoPass,
+    Renderer,
+    GridPass
 } from './rendering';
 import { ViewHelperGizmo } from './rendering/view-helper-gizmo';
 import { OrbitCameraController } from './camera';
@@ -75,7 +75,6 @@ export class World {
     private passManager!: PassManager;
     private sceneRenderPass!: SceneRenderPass;
     private viewHelperGizmoPass!: ViewHelperGizmoPass;
-    private outlineRenderer!: OutlineRenderer;
     
     // Processor architecture
     private processorManager!: ProcessorManager;
@@ -104,7 +103,7 @@ export class World {
 
     public constructor(container: HTMLElement) {
         this.container = container;
-        this.camera = createCamera(75, 1, 0.1, 1000, [0, 0, 10]);
+        this.camera = createCamera(75, 1, 0.1, 5000, [0, 0, 10]);
         this.paleScene = new PaleScene();
         this.renderer = createRenderer();
         this.gameRenderer = createRenderer(); // 为 Game viewport 创建单独的 renderer
@@ -120,7 +119,6 @@ export class World {
         
         this.initializeInputSystem(container);
         this.initializeCameraController();
-        this.initializeOutlineRenderer(container);
         this.initializePassSystem();
         
         this.resizer = new Resizer(container, this.camera, this.renderer, (width: number, height: number) => {
@@ -181,10 +179,6 @@ export class World {
         
         if (this.inputManager) {
             this.inputManager.dispose();
-        }
-        
-        if (this.outlineRenderer) {
-            this.outlineRenderer.dispose();
         }
         
         if (this.passManager) {
@@ -453,17 +447,17 @@ export class World {
     public async render(width: number, height: number, gizmoSize?: number, useGameCamera: boolean = false): Promise<void> {
         const currentMode = this.modeManager.getCurrentMode();
         const targetRenderer = useGameCamera ? this.gameRenderer : this.renderer;
-        
+
         if (currentMode === EditorMode.Scene && !useGameCamera) {
             // Scene 模式：更新相机控制器和 gizmo
             this.cameraController.update();
-            
+
             if (gizmoSize !== undefined && this.viewHelperGizmoPass) {
                 this.viewHelperGizmoPass.setGizmoSize(gizmoSize);
             }
         }
         // Game 模式：相机控制器由游戏逻辑控制，不更新编辑器相机控制器
-        
+
         // 根据模式选择相机
         let targetCamera: PerspectiveCamera;
         if (useGameCamera && this.mainCameraComponent) {
@@ -474,9 +468,12 @@ export class World {
         } else {
             targetCamera = this.camera;
         }
-        
+
         targetRenderer.setViewport(0, 0, width, height);
-        await this.passManager.render(targetRenderer, this.paleScene.getThreeScene(), targetCamera);
+
+        // 使用自定义 Renderer 包装 WebGPURenderer
+        const renderer = new Renderer(targetRenderer);
+        await this.passManager.render(renderer, this.paleScene.getThreeScene(), targetCamera);
     }
     
     /**
@@ -541,36 +538,26 @@ export class World {
         );
     }
     
-    private initializeOutlineRenderer(container: HTMLElement): void {
-        const outlineConfig: OutlineConfig = {
-            color: new Color(0x00ff00),
-            thickness: 5,
-            alpha: 1.0
-        };
-        
-        this.outlineRenderer = new OutlineRenderer(
-            container.clientWidth,
-            container.clientHeight,
-            outlineConfig
-        );
-    }
-    
     private initializePassSystem(): void {
         this.passManager = new PassManager();
 
-        this.sceneRenderPass = new SceneRenderPass(this.paleScene.getThreeScene(), this.camera, true);
-        // outline remain bugs
-        // const outlineConfig: OutlineConfig = {
-        //     color: new Color(0x00ff00),
-        //     thickness: 5,
-        //     alpha: 1.0,
-        // };
-        // this.sceneRenderPass.enableOutline(outlineConfig);
+        const gridPass = new GridPass({
+            size1: 0.1,       // 小网格
+            size2: 1,         // 大网格
+            color: 0x444444,
+            far: this.camera.far  // 使用 camera 远平面
+        });
+        // 将网格添加到主场景，让 SceneRenderPass 统一渲染
+        gridPass.addToScene(this.paleScene.getThreeScene());
+        this.passManager.addPass('grid', gridPass);
+
+        this.sceneRenderPass = new SceneRenderPass(this.paleScene.getThreeScene(), this.camera, false);
+
         this.passManager.addPass('scene', this.sceneRenderPass);
-        
+
         this.viewHelperGizmoPass = new ViewHelperGizmoPass(this.camera);
         this.passManager.addPass('gizmo', this.viewHelperGizmoPass);
-        
+
         const width = this.container.clientWidth;
         const height = this.container.clientHeight;
         this.passManager.setSize(width, height);
@@ -626,20 +613,6 @@ export class World {
     public updateRenderSize(width: number, height: number): void {
         if (this.passManager) {
             this.passManager.setSize(width, height);
-        }
-        
-        if (this.outlineRenderer) {
-            this.outlineRenderer.setSize(width, height);
-        }
-    }
-    
-    public updateOutlineConfig(config: Partial<OutlineConfig>): void {
-        if (this.sceneRenderPass && this.sceneRenderPass.isOutlineEnabled()) {
-            this.sceneRenderPass.updateOutlineConfig(config);
-        }
-
-        if (this.outlineRenderer) {
-            this.outlineRenderer.updateConfig(config);
         }
     }
 
@@ -764,13 +737,6 @@ export class World {
         }
 
         this.selectedObject = object;
-        if (this.sceneRenderPass && this.sceneRenderPass.isOutlineEnabled()) {
-            if (object instanceof Mesh) {
-                this.sceneRenderPass.setSelectedObjects([object]);
-            } else {
-                this.sceneRenderPass.setSelectedObjects([]);
-            }
-        }
         this.emitSelectionChange();
     }
 
