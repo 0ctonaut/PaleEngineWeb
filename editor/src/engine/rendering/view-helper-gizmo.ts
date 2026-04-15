@@ -179,7 +179,7 @@ export class ViewHelperGizmo {
             blackCanvas.width = 256;
             blackCanvas.height = 256;
             blackContext.font = 'bold 150px Consolas';
-            blackContext.fillStyle = '#010101';
+            blackContext.fillStyle = '#7a7a7aff';
             blackContext.textAlign = 'center';
             blackContext.textBaseline = 'middle';
             blackContext.fillText(text, blackCanvas.width / 2, blackCanvas.height / 2);

@@ -3,7 +3,6 @@ import {
     createRenderer,
     createCube,
     createSphere,
-    createLights,
     Resizer,
     SelectionCategory,
     AnimationController,
@@ -11,7 +10,19 @@ import {
     PaleObject,
     ComponentCamera
 } from '@paleengine/core';
-import { PerspectiveCamera, WebGPURenderer, Scene, Mesh, Object3D, Group } from 'three/webgpu';
+import { 
+    PerspectiveCamera, 
+    WebGPURenderer, 
+    Scene, 
+    Mesh, 
+    Object3D, 
+    Group,
+    EquirectangularReflectionMapping,
+    ACESFilmicToneMapping,
+    Color,
+    SRGBColorSpace
+} from 'three/webgpu';
+import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 import { LocalInputManager, InputContext, EventTypes, InputEvent } from './input';
 import {
     PassManager,
@@ -127,6 +138,9 @@ export class World {
         
         this.initializeScene();
         this.setupRenderer(container);
+        
+        // 异步加载天空盒
+        this.loadSkybox();
     }
 
     public async animate(): Promise<void> {
@@ -394,17 +408,17 @@ export class World {
         floor.name = 'Example-Floor';
         this.addObject(floor);
 
-        const light = createLights();
-        light.position.set(10, 10, 10);
-        light.name = 'Example-Light';
-        this.addObject(light);
-
         this.emitHierarchyChange('refresh');
     }
 
     private setupRenderer(container: HTMLElement): void {
         this.renderer.setSize(container.clientWidth, container.clientHeight);
         this.renderer.setPixelRatio(window.devicePixelRatio);
+        
+        // 设置色调映射，正确处理 HDR 天空盒的高亮度值
+        this.renderer.toneMapping = ACESFilmicToneMapping;
+        this.renderer.toneMappingExposure = 1.0;
+        this.renderer.outputColorSpace = SRGBColorSpace;  
         
         const canvas = this.renderer.domElement;
         canvas.setAttribute('tabindex', '0');
@@ -538,6 +552,27 @@ export class World {
         );
     }
     
+    private async loadSkybox(): Promise<void> {
+        const scene = this.paleScene.getThreeScene();
+        try {
+            console.log('Loading HDR skybox...');
+            
+            // 加载 HDR 天空盒 - r180 使用 HDRLoader 替代 RGBELoader
+            const hdrLoader = new HDRLoader();
+            const texture = await hdrLoader.loadAsync('/assets/skyboxes/qwantani_moon_noon_puresky_1k.hdr');
+            // 设置纹理映射方式
+            texture.mapping = EquirectangularReflectionMapping;
+
+            scene.background = texture;
+            scene.environment = texture;
+
+            console.log('Skybox applied to scene');
+        } catch (error) {
+            console.error('Failed to load HDR skybox:', error);
+            scene.background = new Color(0x87CEEB);
+        }
+    }
+
     private initializePassSystem(): void {
         this.passManager = new PassManager();
 
@@ -551,7 +586,7 @@ export class World {
         gridPass.addToScene(this.paleScene.getThreeScene());
         this.passManager.addPass('grid', gridPass);
 
-        this.sceneRenderPass = new SceneRenderPass(this.paleScene.getThreeScene(), this.camera, false);
+        this.sceneRenderPass = new SceneRenderPass(this.paleScene.getThreeScene(), this.camera, true);
 
         this.passManager.addPass('scene', this.sceneRenderPass);
 
