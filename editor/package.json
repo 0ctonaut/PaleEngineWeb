@@ -14,8 +14,12 @@
   },
   "dependencies": {
     "@paleengine/core": "workspace:*",
-    "three": "^0.180.0",
-    "tweakpane": "^4.0.5"
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "dockview": "^5.2.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "three": "^0.180.0"
   },
   "devDependencies": {
     "@types/three": "^0.180.0",
