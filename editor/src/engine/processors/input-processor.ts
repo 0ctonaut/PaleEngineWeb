@@ -1,12 +1,12 @@
-import { World } from '../world';
+import { PaleWorld } from '../world';
 import { LocalInputManager } from '../input';
 
 export abstract class InputProcessor {
-    protected world: World;
+    protected world: PaleWorld;
     protected inputManager: LocalInputManager;
     protected enabled: boolean = true;
 
-    constructor(world: World, inputManager: LocalInputManager) {
+    constructor(world: PaleWorld, inputManager: LocalInputManager) {
         this.world = world;
         this.inputManager = inputManager;
         // Let subclasses control when to set up input handlers

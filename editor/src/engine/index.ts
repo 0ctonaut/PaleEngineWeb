@@ -1,4 +1,4 @@
-export { World } from './world';
+export { PaleWorld as World } from './world';
 export type { WorldEventMap } from './world';
 export * from './input';
 export * from './rendering';

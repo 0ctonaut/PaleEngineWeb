@@ -1,10 +1,12 @@
-import React, { useEffect, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useRef } from 'react';
+import { World } from '../../engine';
 
-export interface ViewportPanelProps {
-    world: any;
-}
+const WorldContext = createContext<World | null>(null);
+export const useWorld = () => useContext(WorldContext);
+export const WorldProvider = WorldContext.Provider;
 
-export const ViewportPanel: React.FC<ViewportPanelProps> = ({ world }) => {
+export const SceneViewportPanel: React.FC = () => {
+    const world = useWorld();
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -13,38 +15,24 @@ export const ViewportPanel: React.FC<ViewportPanelProps> = ({ world }) => {
         const container = containerRef.current;
         const canvas = world.getRenderer().domElement;
 
-        canvas.style.width = '100%';
-        canvas.style.height = '100%';
-        container.appendChild(canvas);
+        if (canvas.parentNode !== container) {
+            if (canvas.parentNode) {
+                canvas.parentNode.removeChild(canvas);
+            }
+            container.appendChild(canvas);
+        }
 
         const updateSize = () => {
-            if (!world) return;
-
             const bounds = container.getBoundingClientRect();
-            const renderer = world.getRenderer();
-            renderer.setSize(bounds.width, bounds.height);
-            renderer.setPixelRatio(window.devicePixelRatio);
-
-            const camera = world.getCamera();
-            camera.aspect = bounds.width / bounds.height;
-            camera.updateProjectionMatrix();
-
-            const passManager = (world as any).passManager;
-            if (passManager) {
-                passManager.setSize(bounds.width, bounds.height);
-            }
+            world.updateSize(bounds.width, bounds.height);
         };
 
         const resizeObserver = new ResizeObserver(updateSize);
         resizeObserver.observe(container);
-
         updateSize();
 
         return () => {
             resizeObserver.disconnect();
-            if (canvas.parentNode === container) {
-                container.removeChild(canvas);
-            }
         };
     }, [world]);
 

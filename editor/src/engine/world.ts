@@ -5,13 +5,11 @@ import {
     createCube,
     createGlassSphere,
     createMirrorSphere,
-    Resizer,
     SelectionCategory,
     Layers,
     AnimationController,
     PaleScene,
-    PaleObject,
-    ComponentCamera
+    PaleObject
 } from '@paleengine/core';
 import { 
     PerspectiveCamera, 
@@ -38,7 +36,6 @@ import { InfiniteGridHelper } from './rendering/infinite-grid-helper';
 import { OrbitCameraController } from './camera';
 import { ProcessorManager, SelectionProcessor, TransformProcessor, UndoRedoProcessor } from './processors';
 import { CommandManager } from './commands';
-import { PerformanceMonitor } from './profiler';
 import { TimeController } from './time-controller';
 import { ModeManager, EditorMode } from './mode-manager';
 
@@ -56,10 +53,14 @@ export type WorldEventMap = {
     hierarchychange: HierarchyChangeEvent;
 };
 
-export class World {
-    private readonly camera: PerspectiveCamera;
-    private readonly renderer: WebGPURenderer;
-    private readonly gameRenderer: WebGPURenderer; // Game viewport 的 renderer
+export interface RendererState {
+    camera: PerspectiveCamera;
+    renderer: WebGPURenderer;
+}
+
+export class PaleWorld {
+    private readonly sceneState: RendererState;
+    private readonly gameState: RendererState;
     private readonly paleScene: PaleScene;
     private readonly meshes: Mesh[] = [];
     private animationId: number | null = null;
@@ -67,9 +68,7 @@ export class World {
     private inputManager!: LocalInputManager;
     private canvasInputContext!: InputContext;
     private selectedObject: Object3D | null = null;
-    private resizer!: Resizer;
     private cameraController!: OrbitCameraController;
-    private container!: HTMLElement;
     private readonly eventListeners: { [K in keyof WorldEventMap]: Set<(event: WorldEventMap[K]) => void> } = {
         selectionchange: new Set(),
         hierarchychange: new Set()
@@ -78,13 +77,6 @@ export class World {
     // Mode management
     private modeManager!: ModeManager;
 
-    public setContainer(container: HTMLElement): void {
-        this.container = container;
-        if (this.resizer) {
-            this.resizer.updateSize();
-        }
-    }
-    
     // Pass system
     private passManager!: PassManager;
     private sceneRenderPass!: SceneRenderPass;
@@ -101,32 +93,24 @@ export class World {
     
     // Time tracking
     private lastFrameTime: number = 0;
-    
-    // Performance monitoring
-    private performanceMonitor!: PerformanceMonitor;
-    
+
     // Animation controllers
     private animationControllers: AnimationController[] = [];
     
     // Time controller
     private timeController!: TimeController;
-    
-    // Main camera for Game mode
-    private mainCamera!: PaleObject;
-    private mainCameraComponent!: ComponentCamera;
 
     public constructor(container: HTMLElement) {
-        this.container = container;
-        this.camera = createCamera(60, 1, 0.1, 5000, [0, 0, 10]);
+        const sceneCamera = createCamera(60, 1, 0.1, 5000, [0, 0, 10]);
+        const sceneRenderer = createRenderer();
+        const gameCamera = createCamera(60, 1, 0.1, 5000, [0, 0, 10]);
+        const gameRenderer = createRenderer();
+        this.sceneState = { camera: sceneCamera, renderer: sceneRenderer };
+        this.gameState = { camera: gameCamera, renderer: gameRenderer };
         this.paleScene = new PaleScene();
-        this.renderer = createRenderer();
-        this.gameRenderer = createRenderer(); // 为 Game viewport 创建单独的 renderer
         
         // Initialize mode manager
         this.modeManager = new ModeManager();
-        
-        // Initialize performance monitor
-        this.performanceMonitor = new PerformanceMonitor();
         
         // Initialize time controller
         this.timeController = new TimeController();
@@ -134,10 +118,6 @@ export class World {
         this.initializeInputSystem(container);
         this.initializeCameraController();
         this.initializePassSystem();
-        
-        this.resizer = new Resizer(container, this.camera, this.renderer, (width: number, height: number) => {
-            this.updateRenderSize(width, height);
-        });
         
         this.initializeScene();
         this.setupRenderer(container);
@@ -152,7 +132,6 @@ export class World {
         }
         
         const deltaTime = this.calculateDeltaTime();
-        this.performanceMonitor.update();
         this.processorManager.update(deltaTime);
         
         // Update time controller (which handles animation time synchronization)
@@ -163,7 +142,7 @@ export class World {
             controller.update(deltaTime);
         });
         
-        await this.renderInternal();
+        this.render();
         
         if (!this.isDisposed) {
             this.animationId = requestAnimationFrame(() => this.animate());
@@ -202,10 +181,6 @@ export class World {
             this.passManager.dispose();
         }
         
-        if (this.resizer) {
-            this.resizer.dispose();
-        }
-        
         if (this.processorManager) {
             this.processorManager.dispose();
         }
@@ -217,17 +192,17 @@ export class World {
         if (this.cameraController) {
             this.cameraController.dispose();
         }
-        
-        if (this.renderer) {
-            const canvas = this.renderer.domElement;
+
+        if (this.sceneState.renderer) {
+            const canvas = this.sceneState.renderer.domElement;
             if (canvas && canvas.parentNode) {
                 canvas.parentNode.removeChild(canvas);
             }
-            if (typeof (this.renderer as any).dispose === 'function') {
-                (this.renderer as any).dispose();
+            if (typeof (this.sceneState.renderer as any).dispose === 'function') {
+                (this.sceneState.renderer as any).dispose();
             }
         }
-        
+
         this.paleScene.clear();
     }
 
@@ -330,18 +305,8 @@ export class World {
     }
 
     private initializeScene(): void {
-        // Enable all layers for editor camera to see everything
-        this.camera.layers.enableAll();
-        
-        // 创建 MainCamera
-        const mainCameraObject = new PaleObject(new Object3D(), 'MainCamera');
-        mainCameraObject.position.set(0, 0, 10);
-        this.mainCameraComponent = new ComponentCamera(75, 1, 0.1, 1000, [0, 0, 10]);
-        mainCameraObject.addComponent(this.mainCameraComponent);
-        this.mainCamera = mainCameraObject;
-        this.addObject(mainCameraObject);
-        // MainCamera 不添加到场景中，它是独立的游戏对象
-        
+        this.sceneState.camera.layers.enableAll();
+
         const mirrorCube = createMirrorSphere();
         mirrorCube.position.set(-2, 0, 0);
         mirrorCube.name = 'Example-Cube';
@@ -361,24 +326,21 @@ export class World {
     }
 
     private setupRenderer(container: HTMLElement): void {
-        this.renderer.setSize(container.clientWidth, container.clientHeight);
-        this.renderer.setPixelRatio(window.devicePixelRatio);
-        
-        // 设置色调映射，正确处理 HDR 天空盒的高亮度值
-        this.renderer.toneMapping = ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = 1.0;
-        this.renderer.outputColorSpace = SRGBColorSpace;  
-        
-        const canvas = this.renderer.domElement;
+        this.sceneState.renderer.setSize(container.clientWidth, container.clientHeight);
+        this.sceneState.renderer.setPixelRatio(window.devicePixelRatio);
+
+        this.sceneState.renderer.toneMapping = ACESFilmicToneMapping;
+        this.sceneState.renderer.toneMappingExposure = 1.0;
+        this.sceneState.renderer.outputColorSpace = SRGBColorSpace;
+
+        const canvas = this.sceneState.renderer.domElement;
         canvas.setAttribute('tabindex', '0');
         canvas.style.outline = 'none';
-        
-        container.append(this.renderer.domElement);
+
+        container.append(this.sceneState.renderer.domElement);
     }
 
     public update(deltaTime: number): void {
-        this.performanceMonitor.update();
-        
         const currentMode = this.modeManager.getCurrentMode();
         
         if (currentMode === EditorMode.Scene) {
@@ -388,13 +350,7 @@ export class World {
             // Game 模式：执行组件系统更新
             this.paleScene.update(deltaTime);
         }
-        
-        // 无论什么模式，都同步 MainCamera 的变换到相机
-        // 这样在 Scene 模式下，如果 MainCamera 的 position 被修改，相机也会同步更新
-        if (this.mainCameraComponent) {
-            this.mainCameraComponent.syncTransform();
-        }
-        
+
         // Update time controller (which handles animation time synchronization)
         this.timeController.update(deltaTime);
         
@@ -404,35 +360,20 @@ export class World {
         });
     }
     
-    public async render(width: number, height: number, gizmoSize?: number, useGameCamera: boolean = false): Promise<void> {
+    public async render(gizmoSize?: number): Promise<void> {
         const currentMode = this.modeManager.getCurrentMode();
-        const targetRenderer = useGameCamera ? this.gameRenderer : this.renderer;
+        const targetState = this.sceneState;
 
-        if (currentMode === EditorMode.Scene && !useGameCamera) {
-            // Scene 模式：更新相机控制器和 gizmo
+        if (currentMode === EditorMode.Scene) {
             this.cameraController.update();
-
             if (gizmoSize !== undefined && this.viewHelperGizmoPass) {
                 this.viewHelperGizmoPass.setGizmoSize(gizmoSize);
             }
         }
-        // Game 模式：相机控制器由游戏逻辑控制，不更新编辑器相机控制器
 
-        // 根据模式选择相机
-        let targetCamera: PerspectiveCamera;
-        if (useGameCamera && this.mainCameraComponent) {
-            // 更新 MainCamera 的 aspect
-            const aspect = width / height;
-            this.mainCameraComponent.aspect = aspect;
-            targetCamera = this.mainCameraComponent.camera;
-        } else {
-            targetCamera = this.camera;
-        }
+        const targetCamera = targetState.camera;
 
-        targetRenderer.setViewport(0, 0, width, height);
-
-        // 使用自定义 Renderer 包装 WebGPURenderer
-        const renderer = new Renderer(targetRenderer);
+        const renderer = new Renderer(targetState.renderer);
         await this.passManager.render(renderer, this.paleScene.getThreeScene(), targetCamera);
     }
     
@@ -440,14 +381,9 @@ export class World {
      * 获取 Game renderer
      */
     public getGameRenderer(): WebGPURenderer {
-        return this.gameRenderer;
+        return this.gameState.renderer;
     }
     
-    private async renderInternal(): Promise<void> {
-        const width = this.container.clientWidth;
-        const height = this.container.clientHeight;
-        await this.render(width, height);
-    }
     
     private initializeInputSystem(container: HTMLElement): void {
         this.canvasInputContext = new InputContext({
@@ -486,7 +422,7 @@ export class World {
     
     private initializeCameraController(): void {
         this.cameraController = new OrbitCameraController(
-            this.camera,
+            this.sceneState.camera,
             this.inputManager,
             {
                 rotateSensitivity: 0.01,
@@ -522,63 +458,51 @@ export class World {
     private initializePassSystem(): void {
         this.passManager = new PassManager();
 
-        const grid = new InfiniteGridHelper(0.1, 1, 0x444444, this.camera.far);
+        const grid = new InfiniteGridHelper(0.1, 1, 0x444444, this.sceneState.camera.far);
         grid.layers.set(Layers.UI);
         const paleObject = new PaleObject(grid, 'Grid');
         paleObject.tag = SelectionCategory.UI_HELPER;
         this.addMesh(paleObject.getThreeObject() as Mesh);
 
-        this.sceneRenderPass = new SceneRenderPass(this.paleScene.getThreeScene(), this.camera, true);
+        this.sceneRenderPass = new SceneRenderPass(this.paleScene.getThreeScene(), this.sceneState.camera, true);
 
         this.passManager.addPass('scene', this.sceneRenderPass);
 
-        this.viewHelperGizmoPass = new ViewHelperGizmoPass(this.camera);
+        this.viewHelperGizmoPass = new ViewHelperGizmoPass(this.sceneState.camera);
         this.passManager.addPass('gizmo', this.viewHelperGizmoPass);
-
-        const width = this.container.clientWidth;
-        const height = this.container.clientHeight;
-        this.passManager.setSize(width, height);
     }
     
     private setupInputHandlers(): void {
         // Handle view helper gizmo hover
         this.inputManager.on(EventTypes.MOUSE_MOVE, (event: InputEvent) => {
             if (this.viewHelperGizmoPass) {
-                // Get mouse position relative to canvas
-                const canvas = this.renderer.domElement;
+                const canvas = this.sceneState.renderer.domElement;
                 const rect = canvas.getBoundingClientRect();
                 const clientX = event.globalPosition.x - rect.left;
                 const clientY = event.globalPosition.y - rect.top;
-                
-                // Update hover state
+
                 this.viewHelperGizmoPass.handleHover(clientX, clientY);
             }
         });
-        
-        // Handle view helper gizmo clicks
+
         this.inputManager.on(EventTypes.CLICK, (event: InputEvent) => {
             if (this.viewHelperGizmoPass) {
-                // Get click position relative to canvas
-                const canvas = this.renderer.domElement;
+                const canvas = this.sceneState.renderer.domElement;
                 const rect = canvas.getBoundingClientRect();
                 const clientX = event.globalPosition.x - rect.left;
                 const clientY = event.globalPosition.y - rect.top;
-                
-                // Check if click hits gizmo and handle view change
+
                 const direction = this.viewHelperGizmoPass.handleClick(clientX, clientY);
                 if (direction) {
-                    // Get view parameters from direction
                     const { azimuth, polar } = ViewHelperGizmo.getViewParameters(direction, this.cameraController.getDistance());
-                    // Update camera angles
                     this.cameraController.setAngles(azimuth, polar);
-                    // Stop event propagation to prevent other handlers from processing
                     event.stopPropagation();
                 }
             }
         });
-        
+
         this.inputManager.on(EventTypes.MOUSE_DOWN, (_event: InputEvent) => {
-            const canvas = this.renderer.domElement;
+            const canvas = this.sceneState.renderer.domElement;
             canvas.focus();
         });
         
@@ -598,7 +522,24 @@ export class World {
     }
 
     public getCamera(): PerspectiveCamera {
-        return this.camera;
+        return this.sceneState.camera;
+    }
+
+    public updateSize(width: number, height: number): void {
+        // TODO: 需要区分scene和game
+        this.sceneState.renderer.setSize(width, height);
+        this.sceneState.renderer.setPixelRatio(window.devicePixelRatio);
+        this.sceneState.camera.aspect = width / height;
+        this.sceneState.camera.updateProjectionMatrix();
+
+        this.gameState.renderer.setSize(width, height);
+        this.gameState.renderer.setPixelRatio(window.devicePixelRatio);
+        this.gameState.camera.aspect = width / height;
+        this.gameState.camera.updateProjectionMatrix();
+
+        if (this.passManager) {
+            this.passManager.setSize(width, height);
+        }
     }
 
     public getScene(): Scene {
@@ -617,18 +558,17 @@ export class World {
      * 进入 Game 模式
      */
     public enterGameMode(): void {
-        // 保存编辑器状态
         this.modeManager.saveState({
             selectedObject: this.selectedObject,
             cameraPosition: {
-                x: this.camera.position.x,
-                y: this.camera.position.y,
-                z: this.camera.position.z
+                x: this.sceneState.camera.position.x,
+                y: this.sceneState.camera.position.y,
+                z: this.sceneState.camera.position.z
             },
             cameraRotation: {
-                x: this.camera.rotation.x,
-                y: this.camera.rotation.y,
-                z: this.camera.rotation.z
+                x: this.sceneState.camera.rotation.x,
+                y: this.sceneState.camera.rotation.y,
+                z: this.sceneState.camera.rotation.z
             }
         });
         
@@ -641,13 +581,7 @@ export class World {
         
         // 重置组件系统（准备重新开始）
         this.paleScene.reset();
-        
-        // 注册 MainCamera 的组件
-        const mainCameraComponents = this.mainCamera.getAllComponents();
-        for (const component of mainCameraComponents) {
-            this.paleScene.getComponentManager().registerComponent(component);
-        }
-        
+
         // 重新注册所有场景对象的组件（触发 Awake）
         const objects = this.paleScene.getObjects();
         for (const object of objects) {
@@ -684,14 +618,14 @@ export class World {
                 this.setSelectedObject(savedState.selectedObject);
             }
             if (savedState.cameraPosition) {
-                this.camera.position.set(
+                this.sceneState.camera.position.set(
                     savedState.cameraPosition.x,
                     savedState.cameraPosition.y,
                     savedState.cameraPosition.z
                 );
             }
             if (savedState.cameraRotation) {
-                this.camera.rotation.set(
+                this.sceneState.camera.rotation.set(
                     savedState.cameraRotation.x,
                     savedState.cameraRotation.y,
                     savedState.cameraRotation.z
@@ -705,7 +639,7 @@ export class World {
     }
 
     public getRenderer(): WebGPURenderer {
-        return this.renderer;
+        return this.sceneState.renderer;
     }
 
     public setSelectedObject(object: Object3D | null): void {
@@ -727,10 +661,6 @@ export class World {
 
     public getTransformProcessor(): TransformProcessor {
         return this.transformProcessor;
-    }
-
-    public getPerformanceMonitor(): PerformanceMonitor {
-        return this.performanceMonitor;
     }
 
     /**
@@ -794,20 +724,6 @@ export class World {
      */
     public getTimeController(): TimeController {
         return this.timeController;
-    }
-    
-    /**
-     * 获取 MainCamera
-     */
-    public getMainCamera(): PaleObject {
-        return this.mainCamera;
-    }
-    
-    /**
-     * 获取 MainCamera 的 ComponentCamera 组件
-     */
-    public getMainCameraComponent(): ComponentCamera {
-        return this.mainCameraComponent;
     }
 
     public on<K extends keyof WorldEventMap>(type: K, listener: (event: WorldEventMap[K]) => void): void {

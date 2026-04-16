@@ -7,29 +7,10 @@ export interface WorldUI {
     dispose: () => void;
 }
 
-interface Containers {
-    workspaceContainer: HTMLElement;
-}
-
-export function createWorldUI(containers: Containers): WorldUI {
-    const { workspaceContainer } = containers;
-
-    const root: Root = createRoot(workspaceContainer);
-
-    let world: World | null = null;
-
-    const attachWorld = (worldInstance: World) => {
-        world = worldInstance;
-        root.render(<DockviewHost world={world} />);
-    };
-
-    const dispose = () => {
-        root.unmount();
-    };
-
-    (window as any).attachWorld = attachWorld;
-
+export function createWorldUI(paleWorkSpaceContainer: HTMLElement, world: World): WorldUI {
+    const root: Root = createRoot(paleWorkSpaceContainer);
+    root.render(<DockviewHost world={world} />);
     return {
-        dispose,
+        dispose: () => root.unmount(),
     };
 }
