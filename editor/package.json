@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "@paleengine/core": "workspace:*",
-    "three": "^0.180.0"
+    "three": "^0.180.0",
+    "tweakpane": "^4.0.5"
   },
   "devDependencies": {
     "@types/three": "^0.180.0",

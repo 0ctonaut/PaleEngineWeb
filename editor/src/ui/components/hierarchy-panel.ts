@@ -524,14 +524,14 @@ export class HierarchyPanel extends Panel {
         ];
     }
 
-    private handleCreatePrimitive(type: 'cube' | 'sphere', parent: Object3D): void {
-        this.ensureParentExpanded(parent);
-        this.world.createPrimitive(type, parent);
-        if (this.nodeElements.has(parent.uuid)) {
-            this.updateNodeExpansion(parent);
-        } else {
-            this.scheduleRefresh();
-        }
+    private handleCreatePrimitive(_type: 'cube' | 'sphere', _parent: Object3D): void {
+        // this.ensureParentExpanded(parent);
+        // this.world.createPrimitive(type, parent);
+        // if (this.nodeElements.has(parent.uuid)) {
+        //     this.updateNodeExpansion(parent);
+        // } else {
+        //     this.scheduleRefresh();
+        // }
     }
 
     private handleNodeSelection(object: Object3D): void {
@@ -758,13 +758,13 @@ export class HierarchyPanel extends Panel {
         return this.world.getScene().getObjectByProperty('uuid', uuid) as Object3D | Scene | null;
     }
 
-    private ensureParentExpanded(parent: Object3D): void {
-        if (this.isSceneRoot(parent)) {
-            return;
-        }
-        this.expandState.set(parent.uuid, true);
-        this.updateNodeExpansion(parent);
-    }
+    // private ensureParentExpanded(parent: Object3D): void {
+    //     if (this.isSceneRoot(parent)) {
+    //         return;
+    //     }
+    //     this.expandState.set(parent.uuid, true);
+    //     this.updateNodeExpansion(parent);
+    // }
 
     public dispose(): void {
         this.world.off('hierarchychange', this.handleHierarchyChange);

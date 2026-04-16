@@ -9,3 +9,5 @@ export * from './ecs';
 
 // IO exports
 export * from './io';
+
+export * from './primitives';

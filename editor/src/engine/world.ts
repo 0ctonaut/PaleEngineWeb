@@ -3,9 +3,11 @@ import {
     createCamera,
     createRenderer,
     createCube,
-    createSphere,
+    createGlassSphere,
+    createMirrorSphere,
     Resizer,
     SelectionCategory,
+    Layers,
     AnimationController,
     PaleScene,
     PaleObject,
@@ -29,10 +31,10 @@ import {
     PassManager,
     SceneRenderPass,
     ViewHelperGizmoPass,
-    Renderer,
-    GridPass
+    Renderer
 } from './rendering';
 import { ViewHelperGizmo } from './rendering/view-helper-gizmo';
+import { InfiniteGridHelper } from './rendering/infinite-grid-helper';
 import { OrbitCameraController } from './camera';
 import { ProcessorManager, SelectionProcessor, TransformProcessor, UndoRedoProcessor } from './processors';
 import { CommandManager } from './commands';
@@ -115,7 +117,7 @@ export class World {
 
     public constructor(container: HTMLElement) {
         this.container = container;
-        this.camera = createCamera(75, 1, 0.1, 5000, [0, 0, 10]);
+        this.camera = createCamera(60, 1, 0.1, 5000, [0, 0, 10]);
         this.paleScene = new PaleScene();
         this.renderer = createRenderer();
         this.gameRenderer = createRenderer(); // 为 Game viewport 创建单独的 renderer
@@ -327,60 +329,6 @@ export class World {
         this.emitHierarchyChange('remove', { object: threeObject, parent });
     }
 
-    public createPrimitive(type: 'cube' | 'sphere', parent?: PaleObject | Object3D | null): PaleObject {
-        let paleObject: PaleObject;
-        switch (type) {
-            case 'sphere':
-                paleObject = createSphere();
-                break;
-            case 'cube':
-                paleObject = createCube();
-                break;
-            default:
-                throw new Error(`Unknown primitive type: ${type}`);
-        }
-
-        if (!paleObject.name || paleObject.name.trim().length === 0) {
-            paleObject.name = this.generatePrimitiveName(type);
-        }
-
-        const threeObject = paleObject.getThreeObject();
-        if (threeObject instanceof Mesh) {
-            this.meshes.push(threeObject);
-        }
-
-        // Set tag (如果还没有设置)
-        if (paleObject.tag === null) {
-            paleObject.tag = SelectionCategory.SCENE_OBJECT;
-        }
-
-        // 处理父对象
-        if (parent) {
-            if (parent instanceof PaleObject) {
-                parent.add(paleObject);
-            } else {
-                // 兼容旧代码：直接添加到 Three.js 场景
-                const parentPaleObject = (parent as any).__paleObject;
-                if (parentPaleObject) {
-                    parentPaleObject.add(paleObject);
-                } else {
-                    this.paleScene.getThreeScene().add(threeObject);
-                }
-            }
-        } else {
-            this.addObject(paleObject);
-        }
-
-        this.emitHierarchyChange('add', { object: threeObject, parent: threeObject.parent ?? null });
-        this.setSelectedObject(threeObject);
-        return paleObject;
-    }
-
-    private generatePrimitiveName(type: 'cube' | 'sphere'): string {
-        const baseName = type.charAt(0).toUpperCase() + type.slice(1);
-        return `${baseName}`;
-    }
-
     private initializeScene(): void {
         // Enable all layers for editor camera to see everything
         this.camera.layers.enableAll();
@@ -394,15 +342,15 @@ export class World {
         this.addObject(mainCameraObject);
         // MainCamera 不添加到场景中，它是独立的游戏对象
         
-        const cube = createCube();
-        cube.position.set(-2, 0, 0);
-        cube.name = 'Example-Cube';
-        this.addObject(cube);
+        const mirrorCube = createMirrorSphere();
+        mirrorCube.position.set(-2, 0, 0);
+        mirrorCube.name = 'Example-Cube';
+        this.addObject(mirrorCube);
 
-        const sphere = createSphere(1, 8, 'orange');
-        sphere.position.set(2, 0, 0);
-        sphere.name = 'Example-Sphere';
-        this.addObject(sphere);
+        const glassSphere = createGlassSphere();
+        glassSphere.position.set(2, 0, 0);
+        glassSphere.name = 'Example-Glass-Ball';
+        this.addObject(glassSphere);
 
         const floor = createCube([10, 1, 10], 'gray');
         floor.position.set(0, -2, 0);
@@ -428,9 +376,6 @@ export class World {
         container.append(this.renderer.domElement);
     }
 
-    /**
-     * 更新逻辑（需要在渲染前调用）
-     */
     public update(deltaTime: number): void {
         this.performanceMonitor.update();
         
@@ -577,15 +522,11 @@ export class World {
     private initializePassSystem(): void {
         this.passManager = new PassManager();
 
-        const gridPass = new GridPass({
-            size1: 0.1,       // 小网格
-            size2: 1,         // 大网格
-            color: 0x444444,
-            far: this.camera.far  // 使用 camera 远平面
-        });
-        // 将网格添加到主场景，让 SceneRenderPass 统一渲染
-        gridPass.addToScene(this.paleScene.getThreeScene());
-        this.passManager.addPass('grid', gridPass);
+        const grid = new InfiniteGridHelper(0.1, 1, 0x444444, this.camera.far);
+        grid.layers.set(Layers.UI);
+        const paleObject = new PaleObject(grid, 'Grid');
+        paleObject.tag = SelectionCategory.UI_HELPER;
+        this.addMesh(paleObject.getThreeObject() as Mesh);
 
         this.sceneRenderPass = new SceneRenderPass(this.paleScene.getThreeScene(), this.camera, true);
 
