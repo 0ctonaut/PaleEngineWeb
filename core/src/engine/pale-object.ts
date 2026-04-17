@@ -3,25 +3,33 @@ import type { MonoBehaviour } from '../components/mono-behavior';
 import type { SelectionCategoryType } from './layers';
 
 export class PaleObject {
+    private static _idCounter: number = 0;
+    private readonly _id: number;
     private readonly _threeObject: Object3D;
     private readonly _components: MonoBehaviour[] = [];
     private _name: string;
     private _tag: SelectionCategoryType | null = null;
+    private _parent: PaleObject | null = null;
 
     constructor(threeObject: Object3D, name?: string) {
+        this._id = ++PaleObject._idCounter;
         this._threeObject = threeObject;
         this._name = name || threeObject.name || 'GameObject';
         this._threeObject.name = this._name;
-        
-        // 从 userData 迁移 tag（向后兼容）
+
+        (threeObject as any).__paleObject = this;
+
         if (threeObject.userData?.selectionCategory) {
             this._tag = threeObject.userData.selectionCategory as SelectionCategoryType;
-            // 保留 userData 中的值以便向后兼容，但优先使用 tag 属性
         }
     }
 
     public getThreeObject(): Object3D {
         return this._threeObject;
+    }
+
+    public get id(): number {
+        return this._id;
     }
 
     public get name(): string {
@@ -77,17 +85,12 @@ export class PaleObject {
         return this._threeObject.userData;
     }
 
-    /**
-     * Tag - 对象的标签（用于选择和过滤）
-     * 从原来的 userData.selectionCategory 迁移而来
-     */
     public get tag(): SelectionCategoryType | null {
         return this._tag;
     }
 
     public set tag(value: SelectionCategoryType | null) {
         this._tag = value;
-        // 同步到 userData 以便向后兼容
         if (value) {
             this._threeObject.userData.selectionCategory = value;
         } else {
@@ -96,16 +99,27 @@ export class PaleObject {
     }
 
     public get parent(): PaleObject | null {
-        const parent = this._threeObject.parent;
-        if (!parent) return null;
-        // 如果父对象有 PaleObject 包装，返回它
-        return (parent as any).__paleObject || null;
+        return this._parent;
     }
 
     public get children(): PaleObject[] {
-        return this._threeObject.children.map(child => {
-            return (child as any).__paleObject || new PaleObject(child);
-        });
+        return this._threeObject.children
+            .map(child => (child as any).__paleObject)
+            .filter((child): child is PaleObject => child !== undefined && child !== null);
+    }
+
+    public addChild(child: PaleObject): void {
+        if (child._parent === this) return;
+
+        this._threeObject.add(child._threeObject);
+        child._parent = this;
+    }
+
+    public removeChild(child: PaleObject): void {
+        if (child._parent !== this) return;
+
+        this._threeObject.remove(child._threeObject);
+        child._parent = null;
     }
 
     public addComponent<T extends MonoBehaviour>(component: T): T {
@@ -114,7 +128,6 @@ export class PaleObject {
             return component;
         }
 
-        // 设置组件的 gameObject 引用
         (component as any).gameObject = this;
         this._components.push(component);
         return component;
@@ -132,7 +145,6 @@ export class PaleObject {
         const index = this._components.indexOf(component);
         if (index > -1) {
             this._components.splice(index, 1);
-            // 调用 OnDestroy
             if (component.enabled) {
                 component.OnDisable();
             }
@@ -145,42 +157,25 @@ export class PaleObject {
         return [...this._components];
     }
 
-    public add(child: PaleObject): void {
-        this._threeObject.add(child._threeObject);
-        // 在 Three.js 对象上保存 PaleObject 引用，方便查找
-        (child._threeObject as any).__paleObject = child;
-    }
-
-    public remove(child: PaleObject): void {
-        this._threeObject.remove(child._threeObject);
-        delete (child._threeObject as any).__paleObject;
-    }
-
     public traverse(callback: (object: PaleObject) => void): void {
-        this._threeObject.traverse((threeObj) => {
-            const paleObj = (threeObj as any).__paleObject;
-            if (paleObj) {
-                callback(paleObj);
-            }
-        });
+        callback(this);
+        for (const child of this.children) {
+            child.traverse(callback);
+        }
     }
 
     public clone(): PaleObject {
         const clonedThree = this._threeObject.clone();
         const cloned = new PaleObject(clonedThree, this._name);
-        
-        for (const _component of this._components) {
 
+        for (const _component of this._components) {
+            // TODO: 复制组件
         }
-        
+
         return cloned;
     }
 
-    /**
-     * 销毁对象
-     */
     public dispose(): void {
-        // 销毁所有组件
         for (const component of this._components) {
             if (component.enabled) {
                 component.OnDisable();
@@ -189,15 +184,14 @@ export class PaleObject {
         }
         this._components.length = 0;
 
-        // 从父对象移除
-        if (this._threeObject.parent) {
-            this._threeObject.parent.remove(this._threeObject);
+        for (const child of this.children) {
+            child.dispose();
         }
 
-        // 清理 Three.js 对象
-        this._threeObject.clear();
+        if (this._parent) {
+            this._parent.removeChild(this);
+        }
+
+        this._threeObject.parent?.remove(this._threeObject);
     }
 }
-
-
-

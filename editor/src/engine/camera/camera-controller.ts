@@ -1,30 +1,34 @@
 import { PerspectiveCamera } from 'three/webgpu';
 
 export abstract class CameraController {
-    protected camera: PerspectiveCamera;
-    protected enabled: boolean = true;
+	protected camera: PerspectiveCamera;
+	protected enabled: boolean = true;
 
-    constructor(camera: PerspectiveCamera) {
-        this.camera = camera;
-    }
+	constructor(camera: PerspectiveCamera) {
+		this.camera = camera;
+	}
 
-    /**
-     * Update camera controller
-     * Subclasses should handle input and update camera state in this method
-     */
-    public abstract update(): void;
+	public setCamera(camera: PerspectiveCamera): void {
+		this.camera = camera;
+	}
 
-    public enable(): void {
-        this.enabled = true;
-    }
+	/**
+	 * Update camera controller
+	 * Subclasses should handle input and update camera state in this method
+	 */
+	public abstract update(): void;
 
-    public disable(): void {
-        this.enabled = false;
-    }
+	public enable(): void {
+		this.enabled = true;
+	}
 
-    public isEnabled(): boolean {
-        return this.enabled;
-    }
+	public disable(): void {
+		this.enabled = false;
+	}
 
-    public abstract dispose(): void;
+	public isEnabled(): boolean {
+		return this.enabled;
+	}
+
+	public abstract dispose(): void;
 }

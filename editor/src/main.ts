@@ -7,7 +7,7 @@ function main(): void {
         if (!paleWorkSpaceContainer) {
             throw new Error('Scene container element not found...');
         }
-        const world = new World(paleWorkSpaceContainer);
+        const world = new World();
         createWorldUI(paleWorkSpaceContainer, world);
         world.animate();
         console.log('PaleEngine Editor initialized successfully');

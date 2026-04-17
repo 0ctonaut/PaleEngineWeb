@@ -18,6 +18,7 @@
     "@types/react-dom": "^19.2.3",
     "dockview": "^5.2.0",
     "react": "^19.2.5",
+    "react-arborist": "^3.4.3",
     "react-dom": "^19.2.5",
     "three": "^0.180.0"
   },

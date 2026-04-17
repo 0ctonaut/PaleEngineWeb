@@ -1,8 +1,4 @@
 export { PaleWorld as World } from './world';
-export type { WorldEventMap } from './world';
-export * from './input';
+export type { WorldEventMap, HierarchyChangeType, HierarchyChangeEvent } from './events';
 export * from './rendering';
-export * from './processors';
-export * from './commands';
-export { ModeManager } from './mode-manager';
-export { EditorMode } from './mode-manager';
+export { ModeManager, EditorMode } from './mode-manager';

@@ -1,0 +1,20 @@
+{
+    "panels": [
+        {
+            "id": "hierarchy",
+            "component": "hierarchy",
+            "title": "Hierarchy",
+            "size": "25%"
+        },
+        {
+            "id": "scene-viewport",
+            "component": "viewport",
+            "title": "Scene",
+            "size": "75%",
+            "position": {
+                "referencePanel": "hierarchy",
+                "direction": "right"
+            }
+        }
+    ]
+}

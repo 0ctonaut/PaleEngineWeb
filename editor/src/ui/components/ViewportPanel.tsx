@@ -13,12 +13,9 @@ export const SceneViewportPanel: React.FC = () => {
         if (!containerRef.current || !world) return;
 
         const container = containerRef.current;
-        const canvas = world.getRenderer().domElement;
+        const canvas = world.renderer.domElement;
 
         if (canvas.parentNode !== container) {
-            if (canvas.parentNode) {
-                canvas.parentNode.removeChild(canvas);
-            }
             container.appendChild(canvas);
         }
 
@@ -31,7 +28,10 @@ export const SceneViewportPanel: React.FC = () => {
         resizeObserver.observe(container);
         updateSize();
 
+        world.startRendering();
+
         return () => {
+            world.stopRendering();
             resizeObserver.disconnect();
         };
     }, [world]);

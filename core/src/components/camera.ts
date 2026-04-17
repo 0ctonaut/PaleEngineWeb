@@ -3,7 +3,7 @@ import { PerspectiveCamera } from 'three/webgpu';
 export type CameraPosition = [number, number, number];
 
 export function createCamera(
-    fov: number = 75,
+    fov: number = 60,
     aspect: number = 1,
     near: number = 0.1,
     far: number = 100000,
@@ -12,7 +12,7 @@ export function createCamera(
     // Parameter validation
     if (fov <= 0 || fov >= 180) {
         console.warn('FOV must be between 0 and 180 degrees, using default value 75');
-        fov = 75;
+        fov = 60;
     }
     
     if (near <= 0 || near >= far) {
