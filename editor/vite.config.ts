@@ -11,13 +11,11 @@ export default defineConfig({
     emptyOutDir: false
   },
   resolve: {
-    dedupe: ['three', 'three/webgpu'],
-    alias: {
-      'three/webgpu': 'three/webgpu'
-    }
+    dedupe: [],
+    alias: {}
   },
   optimizeDeps: {
-    include: ['three/webgpu'],
+    include: [],
     force: true
   }
 })

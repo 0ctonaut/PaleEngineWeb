@@ -19,11 +19,9 @@
     "dockview": "^5.2.0",
     "react": "^19.2.5",
     "react-arborist": "^3.4.3",
-    "react-dom": "^19.2.5",
-    "three": "^0.180.0"
+    "react-dom": "^19.2.5"
   },
   "devDependencies": {
-    "@types/three": "^0.180.0",
     "typescript": "^5.9.3",
     "vite": "^7.1.7"
   }

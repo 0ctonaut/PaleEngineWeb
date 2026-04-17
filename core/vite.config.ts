@@ -9,12 +9,9 @@ export default defineConfig({
       formats: ['es']
     },
     rollupOptions: {
-      external: ['three', 'three/webgpu'],
+      external: [],
       output: {
-        globals: {
-          three: 'THREE',
-          'three/webgpu': 'THREE'
-        }
+        globals: {}
       }
     },
     outDir: 'dist',

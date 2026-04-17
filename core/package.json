@@ -1,7 +1,7 @@
 {
   "name": "@paleengine/core",
   "version": "1.0.0",
-  "description": "PaleEngine Core - A modern 3D engine built with Three.js and WebGPU",
+  "description": "PaleEngine Core - A modern 3D engine built with Babylon.js",
   "main": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "exports": {
@@ -38,11 +38,8 @@
   },
   "author": "0ctonaut",
   "license": "GPL-3.0",
-  "peerDependencies": {
-    "three": "^0.180.0"
-  },
+  "peerDependencies": {},
   "devDependencies": {
-    "@types/three": "^0.180.0",
     "typescript": "^5.9.3",
     "vite": "^7.1.7"
   }

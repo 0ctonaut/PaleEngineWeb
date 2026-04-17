@@ -7,6 +7,13 @@ settings:
 importers:
 
   .:
+    dependencies:
+      babylonjs:
+        specifier: ^9.3.0
+        version: 9.3.0
+      tailwindcss:
+        specifier: ^4.2.2
+        version: 4.2.2
     devDependencies:
       '@types/three':
         specifier: ^0.180.0
@@ -22,14 +29,7 @@ importers:
         version: 7.1.11
 
   core:
-    dependencies:
-      three:
-        specifier: ^0.180.0
-        version: 0.180.0
     devDependencies:
-      '@types/three':
-        specifier: ^0.180.0
-        version: 0.180.0
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -60,13 +60,7 @@ importers:
       react-dom:
         specifier: ^19.2.5
         version: 19.2.5(react@19.2.5)
-      three:
-        specifier: ^0.180.0
-        version: 0.180.0
     devDependencies:
-      '@types/three':
-        specifier: ^0.180.0
-        version: 0.180.0
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -384,6 +378,9 @@ packages:
   '@webgpu/types@0.1.66':
     resolution: {integrity: sha512-YA2hLrwLpDsRueNDXIMqN9NTzD6bCDkuXbOSe0heS+f8YE8usA6Gbv1prj81pzVHrbaAma7zObnIC+I6/sXJgA==}
 
+  babylonjs@9.3.0:
+    resolution: {integrity: sha512-RJlF59l/I08m4brWoiRy0oKFZSVp38noIu2lpTHtNjKmocw4ZDw02ucwhxgN4cHZl/mxFTjmoRzfN5QQ6Q+35Q==}
+
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
 
@@ -514,8 +511,8 @@ packages:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
 
-  three@0.180.0:
-    resolution: {integrity: sha512-o+qycAMZrh+TsE01GqWUxUIKR1AL0S8pq7zDkYOQw8GqfX8b8VoCKYUoHbhiX5j+7hr8XsuHDVU6+gkQJQKg9w==}
+  tailwindcss@4.2.2:
+    resolution: {integrity: sha512-KWBIxs1Xb6NoLdMVqhbhgwZf2PGBpPEiwOqgI4pFIYbNTfBXiKYyWoTsXgBQ9WFg/OlhnvHaY+AEpW7wSmFo2Q==}
 
   tinyglobby@0.2.15:
     resolution: {integrity: sha512-j2Zq4NyQYG5XMST4cbs02Ak8iJUdxRM0XI5QyxXuZOzKOINmWurp3smXu3y5wDcJrptwpSjgXHzIQxR0omXljQ==}
@@ -755,6 +752,8 @@ snapshots:
 
   '@webgpu/types@0.1.66': {}
 
+  babylonjs@9.3.0: {}
+
   csstype@3.2.3: {}
 
   dnd-core@14.0.1:
@@ -915,7 +914,7 @@ snapshots:
 
   source-map-js@1.2.1: {}
 
-  three@0.180.0: {}
+  tailwindcss@4.2.2: {}
 
   tinyglobby@0.2.15:
     dependencies:
